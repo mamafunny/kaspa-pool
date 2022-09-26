@@ -1,0 +1,4 @@
+{"level":"info","ts":"2022-09-26T01:29:53Z","msg":"hosting prom stats on :2114/metrics","server":"prometheus"}
+{"level":"error","ts":"2022-09-26T01:29:53Z","msg":"error serving prom metrics{error 26 0  listen tcp :2114: bind: address already in use}","server":"prometheus"}
+{"level":"info","ts":"2022-09-26T01:29:53Z","msg":"checking kaspad sync state","component":"kaspaapi:localhost:16110"}
+{"level":"info","ts":"2022-09-26T01:29:53Z","msg":"kaspad synced, starting server","component":"kaspaapi:localhost:16110"}
