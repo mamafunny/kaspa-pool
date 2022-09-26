@@ -1,0 +1,5 @@
+configMapGenerator:
+ - name: router-config-mount
+   files:
+     - ./router.conf
+ 

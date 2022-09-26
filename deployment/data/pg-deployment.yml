@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: data
+  name: pg-persist-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 16Gi
+  storageClassName: standard-rwo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: data
+  labels:
+    app: postgres
+data:
+  POSTGRES_DB: kaspa-db
+  POSTGRES_USER: pooladmin
+  POSTGRES_PASSWORD: a0R4Jk10MG1qODg5NEFecEMxWGlQdFp1OTFESEJwUWU5cyF1R0k2RA
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres  # Sets Deployment name
+  namespace: data
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14.5 # Sets Image
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - containerPort: 5432  # Exposes container port
+          envFrom:
+            - configMapRef:
+                name: postgres-config
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: pg-persist-vol
+              subPath: postgres
+      volumes:
+        - name: pg-persist-vol
+          persistentVolumeClaim:
+            claimName: pg-persist-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service 
+  namespace: data
+  labels:
+    app: postgres
+spec:
+  type: NodePort
+  ports:
+    - port: 5432
+  selector:
+    app: postgres

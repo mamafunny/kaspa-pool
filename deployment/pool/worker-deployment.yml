@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pool-worker-config
+  namespace: pool
+data:
+  config: |
+    stratum_port:   :5555
+    kaspad_address: kaspad-service.default:16110
+    prom_port:      :2114
+    redis_port:     :6379
+    hcp:            :6666
+    postgres:
+      host:         postgres.data
+      port:         5432
+      user:         pooladmin
+      pass:         a0R4Jk10MG1qODg5NEFecEMxWGlQdFp1OTFESEJwUWU5cyF1R0k2RA
+      database:     kaspa-db
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pool-worker
+  namespace: pool
+spec:
+  containers:
+  - name: bridge-sha256-1
+    args:
+    - -log=false
+    - -prom=:2112
+    - -hcp=:5556
+    - -kaspa=kaspad-service.default:16110
+    - -stats=false
+    image: us-east1-docker.pkg.dev/praxis-paratext-363002/ks-bridge/bridge:latest
+    imagePullPolicy: IfNotPresent
+    name: bridge-sha256-1
+    readinessProbe:
+      failureThreshold: 3
+      httpGet:
+        path: /readyz
+        port: 5556
+        scheme: HTTP
+      periodSeconds: 10
+      successThreshold: 1
+      timeoutSeconds: 1
+    resources:
+      limits:
+        cpu: 100m
+        memory: 64Mi
+      requests:
+        cpu: 250m
+        memory: 100Mi
+    volumeMounts:
+      - mountPath: /
+        name: pool-worker-vol
+  volumes:
+    - name: pool-worker-vol
+      configMap:
+        name: pool-worker-config
+        items:
+        - key: pool-worker-config
+          path: config.yaml
