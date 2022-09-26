@@ -36,7 +36,6 @@ func (c *clientListener) OnConnect(ctx *gostratum.StratumContext) {
 	go func() {
 		// hacky, but give time for the authorize to go through so we can use the worker name
 		time.Sleep(5 * time.Second)
-		c.shareHandler.getCreateStats(ctx) // create the stats if they don't exist
 	}()
 }
 

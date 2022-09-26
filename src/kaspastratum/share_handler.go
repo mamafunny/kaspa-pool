@@ -2,14 +2,13 @@ package kaspastratum
 
 import (
 	"fmt"
-	"log"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/go-redis/redis/v8"
+	"github.com/jackc/pgx"
 	"github.com/kaspanet/kaspad/app/appmessage"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/domain/consensus/utils/pow"
@@ -18,58 +17,23 @@ import (
 	"github.com/pkg/errors"
 )
 
-type WorkStats struct {
-	SharesFound   int64
-	StaleShares   int64
-	InvalidShares int64
-	WorkerName    string
-	StartTime     time.Time
-	LastShare     time.Time
-}
-
 type shareHandler struct {
 	kaspa        *rpcclient.RPCClient
-	stats        map[string]*WorkStats
 	statsLock    sync.Mutex
-	overall      WorkStats
 	tipBlueScore uint64
+	redis        redis.Client
+	shareSet     ZSet
+	postgres     *pgx.Conn
 }
 
-func newShareHandler(kaspa *rpcclient.RPCClient) *shareHandler {
+func newShareHandler(kaspa *rpcclient.RPCClient, redis *redis.Client, pg *pgx.Conn) *shareHandler {
 	return &shareHandler{
 		kaspa:     kaspa,
-		stats:     map[string]*WorkStats{},
 		statsLock: sync.Mutex{},
+		redis:     *redis,
+		shareSet:  NewZSet(redis, "share_buffer"),
+		postgres:  pg,
 	}
-}
-
-func (sh *shareHandler) getCreateStats(ctx *gostratum.StratumContext) *WorkStats {
-	sh.statsLock.Lock()
-	var stats *WorkStats
-	found := false
-	if ctx.WorkerName != "" {
-		stats, found = sh.stats[ctx.WorkerName]
-	}
-	if !found { // no worker name, check by remote address
-		stats, found = sh.stats[ctx.RemoteAddr]
-		if found {
-			// no worker name, but remote addr is there
-			// so replacet the remote addr with the worker names
-			delete(sh.stats, ctx.RemoteAddr)
-			stats.WorkerName = ctx.WorkerName
-			sh.stats[ctx.WorkerName] = stats
-		}
-	}
-	if !found { // legit doesn't exist, create it
-		stats = &WorkStats{}
-		stats.LastShare = time.Now()
-		stats.WorkerName = ctx.RemoteAddr
-		stats.StartTime = time.Now()
-		sh.stats[ctx.RemoteAddr] = stats
-	}
-
-	sh.statsLock.Unlock()
-	return stats
 }
 
 type submitInfo struct {
@@ -125,14 +89,28 @@ func (sh *shareHandler) checkStales(ctx *gostratum.StratumContext, si *submitInf
 	tip := sh.tipBlueScore
 	if si.block.Header.BlueScore > tip {
 		sh.tipBlueScore = si.block.Header.BlueScore
-		return nil // can't be
-	}
-	if tip-si.block.Header.BlueScore > workWindow {
+	} else if tip-si.block.Header.BlueScore > workWindow {
 		RecordStaleShare(ctx)
 		return errors.Wrapf(ErrStaleShare, "blueScore %d vs %d", si.block.Header.BlueScore, tip)
 	}
-	// TODO (bs): dupe share tracking
-	return nil
+	val, err := sh.shareSet.AddValues(ctx, ZSetKVP{
+		Score:  float64(time.Now().Unix()),
+		Member: fmt.Sprintf("%d_%d", si.block.Header.BlueScore, si.nonceVal),
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed writing share to redis")
+	}
+	if val > 0 { // val > 0 means new value
+		// credit to miner
+		_, err := sh.postgres.Exec(`INSERT into shares(wallet, bluescore, nonce, timestamp) 
+									 VALUES ($1, $2, $3, $4)`,
+			ctx.WalletAddr, si.block.Header.BlueScore, si.nonceVal, time.Now())
+		if err != nil {
+			return errors.Wrap(err, "failed writing share to pg")
+		}
+		return nil
+	}
+	return ErrDupeShare
 }
 
 func (sh *shareHandler) HandleSubmit(ctx *gostratum.StratumContext, event gostratum.JsonRpcEvent) error {
@@ -140,7 +118,6 @@ func (sh *shareHandler) HandleSubmit(ctx *gostratum.StratumContext, event gostra
 	if err != nil {
 		return err
 	}
-
 	ctx.Logger.Debug(submitInfo.block.Header.BlueScore, " submit ", submitInfo.noncestr)
 	if GetMiningState(ctx).useBigJob {
 		submitInfo.nonceVal, err = strconv.ParseUint(submitInfo.noncestr, 16, 64)
@@ -155,16 +132,13 @@ func (sh *shareHandler) HandleSubmit(ctx *gostratum.StratumContext, event gostra
 			return errors.Wrap(err, "failed parsing noncestr")
 		}
 	}
-	stats := sh.getCreateStats(ctx)
 	if err := sh.checkStales(ctx, submitInfo); err != nil {
 		if err == ErrDupeShare {
 			ctx.Logger.Info("dupe share "+submitInfo.noncestr, ctx.WorkerName, ctx.WalletAddr)
-			atomic.AddInt64(&stats.StaleShares, 1)
 			RecordDupeShare(ctx)
 			return ctx.ReplyDupeShare(event.Id)
 		} else if errors.Is(err, ErrStaleShare) {
 			ctx.Logger.Info(err.Error(), ctx.WorkerName, ctx.WalletAddr)
-			atomic.AddInt64(&stats.StaleShares, 1)
 			RecordStaleShare(ctx)
 			return ctx.ReplyStaleShare(event.Id)
 		}
@@ -192,9 +166,6 @@ func (sh *shareHandler) HandleSubmit(ctx *gostratum.StratumContext, event gostra
 	// 	RecordWeakShare(ctx)
 	// 	return ctx.ReplyLowDiffShare(event.Id)
 	// }
-
-	atomic.AddInt64(&stats.SharesFound, 1)
-	stats.LastShare = time.Now()
 	RecordShareFound(ctx)
 
 	return ctx.Reply(gostratum.JsonRpcResponse{
@@ -220,14 +191,10 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 		if strings.Contains(err.Error(), "ErrDuplicateBlock") {
 			ctx.Logger.Warn("block rejected, stale")
 			// stale
-			atomic.AddInt64(&sh.getCreateStats(ctx).StaleShares, 1)
-			atomic.AddInt64(&sh.overall.StaleShares, 1)
 			RecordStaleShare(ctx)
 			return ctx.ReplyStaleShare(eventId)
 		} else {
 			ctx.Logger.Warn("block rejected, unknown issue (probably bad pow")
-			atomic.AddInt64(&sh.getCreateStats(ctx).InvalidShares, 1)
-			atomic.AddInt64(&sh.overall.InvalidShares, 1)
 			RecordInvalidShare(ctx)
 			return ctx.ReplyBadShare(eventId)
 		}
@@ -235,47 +202,8 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 
 	// :)
 	ctx.Logger.Info("block accepted")
-	stats := sh.getCreateStats(ctx)
-	stats.LastShare = time.Now()
-	atomic.AddInt64(&stats.SharesFound, 1)
-	atomic.AddInt64(&sh.overall.SharesFound, 1)
 	RecordBlockFound(ctx)
 	return ctx.Reply(gostratum.JsonRpcResponse{
 		Result: true,
 	})
-}
-
-func (sh *shareHandler) startStatsThread() error {
-	start := time.Now()
-	for {
-		// console formatting is terrible. Good luck whever touches anything
-		time.Sleep(10 * time.Second)
-		sh.statsLock.Lock()
-		str := "\n=============================================================\n"
-		str += "  worker name   |  avg hashrate  |   acc/stl/inv  |   uptime \n"
-		str += "-------------------------------------------------------------\n"
-		var lines []string
-		totalRate := float64(0)
-		for _, v := range sh.stats {
-			rate := GetAverageHashrateGHz(v)
-			totalRate += rate
-			rateStr := fmt.Sprintf("%0.2fGH/s", rate) // todo, fix units
-			ratioStr := fmt.Sprintf("%d/%d/%d", v.SharesFound, v.StaleShares, v.InvalidShares)
-			lines = append(lines, fmt.Sprintf("%-16s| %14.14s | %14.14s | %8.8s",
-				v.WorkerName, rateStr, ratioStr, time.Since(v.StartTime).Round(time.Second)))
-		}
-		sort.Strings(lines)
-		str += strings.Join(lines, "\n")
-		rateStr := fmt.Sprintf("%0.2fGH/s", totalRate) // todo, fix units
-		str += "\n-------------------------------------------------------------\n"
-		str += fmt.Sprintf("mined: %-5d    | %14.14s |                | %8.8s",
-			sh.overall.SharesFound, rateStr, time.Since(start).Round(time.Second))
-		str += "\n============================================= ks_bridge_" + version + "\n"
-		sh.statsLock.Unlock()
-		log.Println(str)
-	}
-}
-
-func GetAverageHashrateGHz(stats *WorkStats) float64 {
-	return (float64(stats.SharesFound) * shareValue) / time.Since(stats.StartTime).Seconds()
 }

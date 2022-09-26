@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -22,6 +23,20 @@ type StratumContext struct {
 	disconnecting bool
 	onDisconnect  chan *StratumContext
 	State         any // gross, but go generics aren't mature enough this can be typed 😭
+}
+
+func NewMockContext(ctx context.Context, logger *zap.SugaredLogger, state any) (*StratumContext, *MockConnection) {
+	mc := NewMockConnection()
+	return &StratumContext{
+		ctx:        ctx,
+		State:      state,
+		RemoteAddr: "127.0.0.1",
+		WalletAddr: uuid.NewString(),
+		WorkerName: uuid.NewString(),
+		RemoteApp:  "mock.context",
+		Logger:     logger,
+		connection: mc,
+	}, mc
 }
 
 var ErrorDisconnected = fmt.Errorf("disconnecting")
