@@ -53,22 +53,24 @@
         "type": "prometheus",
         "uid": "P1809F7CD0C75ACF3"
       },
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "fixedColor": "dark-blue",
+            "mode": "fixed"
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "dark-blue",
+                "color": "green",
                 "value": null
               }
             ]
-          },
-          "unit": "m"
+          }
         },
         "overrides": []
       },
@@ -78,10 +80,10 @@
         "x": 9,
         "y": 0
       },
-      "id": 29,
+      "id": 14,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -101,15 +103,13 @@
             "uid": "P1809F7CD0C75ACF3"
           },
           "editorMode": "code",
-          "exemplar": false,
-          "expr": "1 / (1 - (1 - ((SUM(rate(ks_valid_share_counter{wallet=~\"${wallet_filter}\"}[10m])) * 17179900) / SUM(ks_estimated_network_hashrate_gauge))) ^ ((SUM(delta(ks_network_block_count[10m])) * 144)))",
-          "instant": true,
+          "expr": "SUM(COUNT BY(bluescore, wallet) (rate(ks_mined_blocks_gauge{wallet=~\"${wallet_filter}\"}[1y])))",
           "legendFormat": "__auto",
-          "range": false,
+          "range": true,
           "refId": "A"
         }
       ],
-      "title": "Est. Time to Win",
+      "title": "Blocks Mined",
       "type": "stat"
     },
     {
@@ -170,7 +170,7 @@
           "refId": "A"
         }
       ],
-      "title": "Connected Workers",
+      "title": "Connected Wallets",
       "type": "stat"
     },
     {
@@ -255,7 +255,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "m"
         },
         "overrides": []
       },
@@ -265,15 +266,15 @@
         "x": 9,
         "y": 4
       },
-      "id": 35,
+      "id": 29,
       "options": {
         "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
+        "graphMode": "area",
+        "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "last"
+            "lastNotNull"
           ],
           "fields": "",
           "values": false
@@ -289,14 +290,14 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "MAX(ks_network_block_count)",
+          "expr": "1 / (1 - (1 - ((SUM(rate(ks_valid_share_counter{wallet=~\"${wallet_filter}\"}[10m])) * 17179900) / SUM(ks_estimated_network_hashrate_gauge))) ^ ((SUM(delta(ks_network_block_count[10m])) * 144)))",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Block Height",
+      "title": "Est. Time to Win",
       "type": "stat"
     },
     {
@@ -432,20 +433,17 @@
         "type": "prometheus",
         "uid": "P1809F7CD0C75ACF3"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "dark-blue",
-            "mode": "fixed"
+            "mode": "thresholds"
           },
           "mappings": [],
-          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "dark-blue",
                 "value": null
               }
             ]
@@ -459,15 +457,15 @@
         "x": 9,
         "y": 8
       },
-      "id": 14,
+      "id": 35,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
+        "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ],
           "fields": "",
           "values": false
@@ -482,13 +480,15 @@
             "uid": "P1809F7CD0C75ACF3"
           },
           "editorMode": "code",
-          "expr": "SUM(COUNT BY(bluescore, wallet) (rate(ks_mined_blocks_gauge{wallet=~\"${wallet_filter}\"}[1y])))",
+          "exemplar": false,
+          "expr": "MAX(ks_network_block_count)",
+          "instant": true,
           "legendFormat": "__auto",
-          "range": true,
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "Blocks Mined",
+      "title": "Block Height",
       "type": "stat"
     },
     {
@@ -623,7 +623,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 177
+                "value": 110
               }
             ]
           },
@@ -635,7 +635,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 300
+                "value": 140
               }
             ]
           }
@@ -697,6 +697,18 @@
               }
             }
           }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "bluescore"
+              }
+            ]
+          }
         }
       ],
       "type": "table"
@@ -756,7 +768,7 @@
             "uid": "P1809F7CD0C75ACF3"
           },
           "editorMode": "code",
-          "expr": "SUM BY (worker) (rate(ks_valid_share_counter[10m])) * 60",
+          "expr": "SUM BY (wallet) (rate(ks_valid_share_counter[10m])) * 60",
           "legendFormat": "{{worker}}",
           "range": true,
           "refId": "A"
@@ -850,7 +862,7 @@
             "uid": "P1809F7CD0C75ACF3"
           },
           "editorMode": "code",
-          "expr": "SUM BY(worker)  (rate(ks_valid_share_counter{wallet=~\"${wallet_filter}\"}[10m]) * 17179900) ",
+          "expr": "SUM BY(worker)  (rate(ks_valid_share_counter{wallet=~\"${wallet_filter}\"}[10m]) * 17179900000) ",
           "hide": false,
           "legendFormat": "{{worker}}",
           "range": true,
@@ -862,7 +874,7 @@
             "uid": "P1809F7CD0C75ACF3"
           },
           "editorMode": "code",
-          "expr": "SUM (rate(ks_valid_share_counter{wallet=~\"${wallet_filter}\"}[10m]) * 17179900)",
+          "expr": "SUM (rate(ks_valid_share_counter{wallet=~\"${wallet_filter}\"}[10m]) * 17179900000)",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
@@ -1287,6 +1299,10 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
               }
             ]
           }
@@ -1299,13 +1315,13 @@
         "x": 12,
         "y": 54
       },
-      "id": 6,
+      "id": 4,
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "mode": "single",
@@ -1319,13 +1335,13 @@
             "uid": "P1809F7CD0C75ACF3"
           },
           "editorMode": "code",
-          "expr": "AVG BY(wallet) (ks_balance_by_wallet_gauge{wallet=~\"${wallet_filter}\"}) *  ${show_balances}",
-          "legendFormat": "{{wallet}}",
+          "expr": "SUM(COUNT BY(bluescore, wallet) (rate(ks_mined_blocks_gauge{wallet=~\"${wallet_filter}\"}[1y])))",
+          "legendFormat": "blocks",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Wallet Balances",
+      "title": "Blocks Mined",
       "type": "timeseries"
     },
     {
@@ -1381,9 +1397,23 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "Hs"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "difficulty"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 12,
@@ -1391,13 +1421,13 @@
         "x": 0,
         "y": 66
       },
-      "id": 4,
+      "id": 8,
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -1411,13 +1441,25 @@
             "uid": "P1809F7CD0C75ACF3"
           },
           "editorMode": "code",
-          "expr": "SUM(COUNT BY(bluescore, wallet) (rate(ks_mined_blocks_gauge{wallet=~\"${wallet_filter}\"}[1y])))",
-          "legendFormat": "blocks",
+          "expr": "ks_estimated_network_hashrate_gauge",
+          "legendFormat": "hashrate",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
+          "editorMode": "code",
+          "expr": "ks_network_difficulty_gauge",
+          "hide": false,
+          "legendFormat": "difficulty",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "Blocks Mined",
+      "title": "Network Stats",
       "type": "timeseries"
     },
     {
@@ -1558,126 +1600,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "Hs"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "difficulty"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "none"
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 12,
-        "w": 12,
-        "x": 0,
-        "y": 78
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
-          },
-          "editorMode": "code",
-          "expr": "ks_estimated_network_hashrate_gauge",
-          "legendFormat": "hashrate",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
-          },
-          "editorMode": "code",
-          "expr": "ks_network_difficulty_gauge",
-          "hide": false,
-          "legendFormat": "difficulty",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Network Stats",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "P1809F7CD0C75ACF3"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1693,7 +1616,7 @@
         "h": 13,
         "w": 12,
         "x": 0,
-        "y": 90
+        "y": 78
       },
       "id": 27,
       "options": {
@@ -1760,7 +1683,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -1787,13 +1710,13 @@
     ]
   },
   "time": {
-    "from": "now-12h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Pool Monitoring",
   "uid": "x7cE7G74k",
-  "version": 13,
+  "version": 20,
   "weekStart": ""
 }
