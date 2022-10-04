@@ -18,17 +18,17 @@ const (
 	StratumMethodSubmit    StratumMethod = "mining.submit"
 )
 
-func DefaultLogger() *zap.SugaredLogger {
+func DefaultLogger() *zap.Logger {
 	cfg := zap.NewDevelopmentEncoderConfig()
 	cfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	return zap.New(zapcore.NewCore(
 		zapcore.NewConsoleEncoder(cfg),
 		zapcore.AddSync(colorable.NewColorableStdout()),
 		zapcore.DebugLevel,
-	)).Sugar()
+	))
 }
 
-func DefaultConfig(logger *zap.SugaredLogger) StratumListenerConfig {
+func DefaultConfig(logger *zap.Logger) StratumListenerConfig {
 	return StratumListenerConfig{
 		StateGenerator: func() any { return nil },
 		HandlerMap:     DefaultHandlers(),
@@ -61,11 +61,12 @@ func HandleAuthorize(ctx *StratumContext, event JsonRpcEvent) error {
 	}
 	ctx.WalletAddr = address
 	ctx.WorkerName = workerName
+	ctx.Logger = ctx.Logger.With(zap.String("worker", ctx.WorkerName), zap.String("addr", ctx.WalletAddr))
 
 	if err := ctx.Reply(NewResponse(event, true, nil)); err != nil {
 		return errors.Wrap(err, "failed to send response to authorize")
 	}
-	ctx.Logger.Info("client authorized, address: ", ctx.WalletAddr)
+	ctx.Logger.Info(fmt.Sprintf("client authorized, address: %s", ctx.WalletAddr))
 	return nil
 }
 

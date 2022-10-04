@@ -1,4 +1,4 @@
-package kaspastratum
+package poolworker
 
 import (
 	"bytes"
@@ -124,7 +124,7 @@ func CalculateTarget(bits uint64) big.Int {
 	truncated := uint64(bits) >> 24
 	mantissa := bits & bi.Uint64()
 	exponent := uint64(0)
-	if truncated < 3 {
+	if truncated <= 3 {
 		mantissa = mantissa >> (8 * (3 - truncated))
 	} else {
 		exponent = 8 * ((bits >> 24) - 3)

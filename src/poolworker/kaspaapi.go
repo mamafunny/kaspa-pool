@@ -1,4 +1,4 @@
-package kaspastratum
+package poolworker
 
 import (
 	"context"
@@ -6,20 +6,20 @@ import (
 	"time"
 
 	"github.com/kaspanet/kaspad/app/appmessage"
+	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/infrastructure/network/rpcclient"
-	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
 type KaspaApi struct {
 	address   string
-	logger    *zap.SugaredLogger
+	logger    *zap.Logger
 	kaspad    *rpcclient.RPCClient
 	connected bool
 }
 
-func NewKaspaAPI(address string, logger *zap.SugaredLogger) (*KaspaApi, error) {
+func NewKaspaAPI(address string, logger *zap.Logger) (*KaspaApi, error) {
 	client, err := rpcclient.NewRPCClient(address)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (ks *KaspaApi) startStatsThread(ctx context.Context) {
 
 func (ks *KaspaApi) reconnect() error {
 	if ks.kaspad != nil {
-		ks.kaspad.Close()
+		return ks.kaspad.Reconnect()
 	}
 
 	client, err := rpcclient.NewRPCClient(ks.address)
@@ -109,9 +109,9 @@ func (s *KaspaApi) startBlockTemplateListener(ctx context.Context, blockReadyCb 
 	ticker := time.NewTicker(tickerTime)
 	for {
 		if err := s.waitForSync(false); err != nil {
-			s.logger.Error("error checking kaspad sync state, attempting reconnect: ", err)
+			s.logger.Error("error checking kaspad sync state, attempting reconnect ", zap.Error(err))
 			if err := s.reconnect(); err != nil {
-				s.logger.Error("error reconnecting to kaspad, waiting before retry: ", err)
+				s.logger.Error("error reconnecting to kaspad, waiting before retry ", zap.Error(err))
 				time.Sleep(5 * time.Second)
 			}
 		}
@@ -128,12 +128,17 @@ func (s *KaspaApi) startBlockTemplateListener(ctx context.Context, blockReadyCb 
 	}
 }
 
-func (ks *KaspaApi) GetBlockTemplate(
-	client *gostratum.StratumContext) (*appmessage.GetBlockTemplateResponseMessage, error) {
-	template, err := ks.kaspad.GetBlockTemplate(client.WalletAddr,
-		fmt.Sprintf(`'%s' via onemorebsmith/kaspa-stratum-bridge_%s`, client.RemoteApp, version))
+var blockSlug = fmt.Sprintf(`onemorebsmith/kaspa-pool_%s`, version)
+
+func (ks *KaspaApi) GetBlockTemplate(addr string) (*appmessage.GetBlockTemplateResponseMessage, error) {
+	template, err := ks.kaspad.GetBlockTemplate(addr, blockSlug)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed fetching new block template from kaspa")
 	}
 	return template, nil
+}
+
+func (ks *KaspaApi) SubmitBlock(block *externalapi.DomainBlock) error {
+	_, err := ks.kaspad.SubmitBlock(block)
+	return err
 }

@@ -1,10 +1,9 @@
-package kaspastratum
+package poolworker
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -12,27 +11,27 @@ import (
 	"github.com/kaspanet/kaspad/app/appmessage"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/domain/consensus/utils/pow"
-	"github.com/kaspanet/kaspad/infrastructure/network/rpcclient"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 type shareHandler struct {
-	kaspa        *rpcclient.RPCClient
-	statsLock    sync.Mutex
+	kaspa        *KaspaApi
 	tipBlueScore uint64
-	redis        redis.Client
 	shareSet     ZSet
-	postgres     *pgx.Conn
+	redisClient  *redis.Client
+	pgClient     *pgx.Conn
+	jobBuffer    *JobManager
 }
 
-func newShareHandler(kaspa *rpcclient.RPCClient, redis *redis.Client, pg *pgx.Conn) *shareHandler {
+func newShareHandler(kaspa *KaspaApi, jm *JobManager, rd *redis.Client, pg *pgx.Conn) *shareHandler {
 	return &shareHandler{
-		kaspa:     kaspa,
-		statsLock: sync.Mutex{},
-		redis:     *redis,
-		shareSet:  NewZSet(redis, "share_buffer"),
-		postgres:  pg,
+		kaspa:       kaspa,
+		redisClient: rd,
+		jobBuffer:   jm,
+		shareSet:    NewZSet(rd, "share_buffer"),
+		pgClient:    pg,
 	}
 }
 
@@ -43,8 +42,8 @@ type submitInfo struct {
 	nonceVal uint64
 }
 
-func validateSubmit(ctx *gostratum.StratumContext, event gostratum.JsonRpcEvent) (*submitInfo, error) {
-	if len(event.Params) < 2 {
+func (sh *shareHandler) validateSubmit(ctx *gostratum.StratumContext, event gostratum.JsonRpcEvent) (*submitInfo, error) {
+	if len(event.Params) < 3 {
 		RecordWorkerError(ctx.WalletAddr, ErrBadDataFromMiner)
 		return nil, fmt.Errorf("malformed event, expected at least 2 params")
 	}
@@ -53,13 +52,13 @@ func validateSubmit(ctx *gostratum.StratumContext, event gostratum.JsonRpcEvent)
 		RecordWorkerError(ctx.WalletAddr, ErrBadDataFromMiner)
 		return nil, fmt.Errorf("unexpected type for param 1: %+v", event.Params...)
 	}
-	jobId, err := strconv.ParseInt(jobIdStr, 10, 0)
+	jobId, err := strconv.ParseUint(jobIdStr, 10, 32)
 	if err != nil {
 		RecordWorkerError(ctx.WalletAddr, ErrBadDataFromMiner)
 		return nil, errors.Wrap(err, "job id is not parsable as an number")
 	}
 	state := GetMiningState(ctx)
-	block, exists := state.GetJob(int(jobId))
+	block, exists := sh.jobBuffer.GetJob(uint32(jobId))
 	if !exists {
 		RecordWorkerError(ctx.WalletAddr, ErrMissingJob)
 		return nil, fmt.Errorf("job does not exist. stale?")
@@ -102,7 +101,7 @@ func (sh *shareHandler) checkStales(ctx *gostratum.StratumContext, si *submitInf
 	}
 	if val > 0 { // val > 0 means new value
 		// credit to miner
-		_, err := sh.postgres.Exec(`INSERT into shares(wallet, bluescore, nonce, timestamp) 
+		_, err := sh.pgClient.Exec(`INSERT into shares(wallet, bluescore, nonce, timestamp) 
 									 VALUES ($1, $2, $3, $4)`,
 			ctx.WalletAddr, si.block.Header.BlueScore, si.nonceVal, time.Now())
 		if err != nil {
@@ -114,11 +113,12 @@ func (sh *shareHandler) checkStales(ctx *gostratum.StratumContext, si *submitInf
 }
 
 func (sh *shareHandler) HandleSubmit(ctx *gostratum.StratumContext, event gostratum.JsonRpcEvent) error {
-	submitInfo, err := validateSubmit(ctx, event)
+	submitInfo, err := sh.validateSubmit(ctx, event)
 	if err != nil {
 		return err
 	}
-	ctx.Logger.Debug(submitInfo.block.Header.BlueScore, " submit ", submitInfo.noncestr)
+
+	ctx.Logger.Debug(fmt.Sprintf("%d submit %s", submitInfo.block.Header.BlueScore, submitInfo.noncestr))
 	if GetMiningState(ctx).useBigJob {
 		submitInfo.nonceVal, err = strconv.ParseUint(submitInfo.noncestr, 16, 64)
 		if err != nil {
@@ -134,16 +134,16 @@ func (sh *shareHandler) HandleSubmit(ctx *gostratum.StratumContext, event gostra
 	}
 	if err := sh.checkStales(ctx, submitInfo); err != nil {
 		if err == ErrDupeShare {
-			ctx.Logger.Info("dupe share "+submitInfo.noncestr, ctx.WorkerName, ctx.WalletAddr)
+			ctx.Logger.Info("dupe share", zap.Error(err))
 			RecordDupeShare(ctx)
 			return ctx.ReplyDupeShare(event.Id)
 		} else if errors.Is(err, ErrStaleShare) {
-			ctx.Logger.Info(err.Error(), ctx.WorkerName, ctx.WalletAddr)
+			ctx.Logger.Info("stale share", zap.Error(err))
 			RecordStaleShare(ctx)
 			return ctx.ReplyStaleShare(event.Id)
 		}
 		// unknown error somehow
-		ctx.Logger.Error("unknown error during check stales: ", err.Error())
+		ctx.Logger.Info("unknown error during share validation", zap.Error(err))
 		return ctx.ReplyBadShare(event.Id)
 	}
 
@@ -166,8 +166,8 @@ func (sh *shareHandler) HandleSubmit(ctx *gostratum.StratumContext, event gostra
 	// 	RecordWeakShare(ctx)
 	// 	return ctx.ReplyLowDiffShare(event.Id)
 	// }
-	RecordShareFound(ctx)
 
+	RecordShareFound(ctx)
 	return ctx.Reply(gostratum.JsonRpcResponse{
 		Id:     event.Id,
 		Result: true,
@@ -178,12 +178,12 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 	block *externalapi.DomainBlock, nonce uint64, eventId any) error {
 	mutable := block.Header.ToMutable()
 	mutable.SetNonce(nonce)
-	_, err := sh.kaspa.SubmitBlock(&externalapi.DomainBlock{
+	err := sh.kaspa.SubmitBlock(&externalapi.DomainBlock{
 		Header:       mutable.ToImmutable(),
 		Transactions: block.Transactions,
 	})
 	// print after the submit to get it submitted faster
-	ctx.Logger.Info("submitted block to kaspad")
+	ctx.Logger.Info(fmt.Sprintf("submitted block to kaspad %s", ctx.String()))
 	ctx.Logger.Info(fmt.Sprintf("Submitted nonce: %d", nonce))
 
 	if err != nil {
@@ -194,7 +194,7 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 			RecordStaleShare(ctx)
 			return ctx.ReplyStaleShare(eventId)
 		} else {
-			ctx.Logger.Warn("block rejected, unknown issue (probably bad pow")
+			ctx.Logger.Warn("block rejected, unknown issue (probably bad pow", zap.Error(err))
 			RecordInvalidShare(ctx)
 			return ctx.ReplyBadShare(eventId)
 		}
@@ -202,7 +202,7 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 
 	// :)
 	ctx.Logger.Info("block accepted")
-	RecordBlockFound(ctx)
+	RecordBlockFound(ctx, block.Header.Nonce(), block.Header.BlueScore())
 	return ctx.Reply(gostratum.JsonRpcResponse{
 		Result: true,
 	})

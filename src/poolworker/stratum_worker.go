@@ -1,4 +1,4 @@
-package kaspastratum
+package poolworker
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/jackc/pgx"
 	"github.com/mattn/go-colorable"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
 	"github.com/pkg/errors"
@@ -15,18 +14,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const version = "v1.1"
+const version = "v0.1"
 
-type BridgeConfig struct {
-	StratumPort     string `yaml:"stratum_port"`
-	RPCServer       string `yaml:"kaspad_address"`
-	PromPort        string `yaml:"prom_port"`
-	HealthCheckPort string `yaml:"health_check_port"`
-	RedisPort       string `yaml:"redis_port"`
-	PostgresPort    string `yaml:"postgres_port"`
-}
-
-func configureZap(cfg BridgeConfig) (*zap.SugaredLogger, func()) {
+func configureZap(cfg WorkerConfig) (*zap.Logger, func()) {
 	pe := zap.NewProductionEncoderConfig()
 	pe.EncodeTime = zapcore.RFC3339TimeEncoder
 	fileEncoder := zapcore.NewJSONEncoder(pe)
@@ -41,10 +31,14 @@ func configureZap(cfg BridgeConfig) (*zap.SugaredLogger, func()) {
 		zapcore.NewCore(fileEncoder, zapcore.AddSync(logFile), zap.InfoLevel),
 		zapcore.NewCore(consoleEncoder, zapcore.AddSync(colorable.NewColorableStdout()), zap.InfoLevel),
 	)
-	return zap.New(core).Sugar(), func() { logFile.Close() }
+	return zap.New(core), func() { logFile.Close() }
 }
 
-func ListenAndServe(cfg BridgeConfig) error {
+func configureRedis(cfg RedisConfig) (*redis.Client, error) {
+	return nil, nil
+}
+
+func ListenAndServe(cfg WorkerConfig) error {
 	logger, logCleanup := configureZap(cfg)
 	defer logCleanup()
 
@@ -65,35 +59,26 @@ func ListenAndServe(cfg BridgeConfig) error {
 		go http.ListenAndServe(cfg.HealthCheckPort, nil)
 	}
 
-	connstring := "postgres://postgres:postgres@localhost:5432/shares"
-	pg, err := pgx.Connect(pgx.ConnConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "kaspa-pool",
-	})
+	pg, err := configurePostgres(cfg.PostgresConfig)
 	if err != nil {
-		return errors.Wrapf(err, "FATAL, failed to connect to postgres at %s", connstring)
+		return errors.Wrap(err, "failed connecting to postgres")
 	}
-	defer pg.Close()
-
-	redis := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisPort,
-		Password: "eSYzVUxnUzgkb0RLV28meDE0SlVJeDEqd2FwTCVYM05YQVJE",
-		DB:       0, // use default DB
-	})
-	if err := redis.Ping(context.Background()); err.Err() != nil {
-		return errors.Wrapf(err.Err(), "FATAL, failed to connect to redis at %s", cfg.RedisPort)
+	rd, err := configureRedis(cfg.RedisConfig)
+	if err != nil {
+		return errors.Wrap(err, "failed connecting to redis")
 	}
 
-	shareHandler := newShareHandler(ksApi.kaspad, redis, pg)
+	jobManager := NewJobManager()
+	shareHandler := newShareHandler(ksApi, jobManager, rd, pg)
 	clientHandler := newClientListener(logger, shareHandler)
 	handlers := gostratum.DefaultHandlers()
 	// override the submit handler with an actual useful handler
 	handlers[string(gostratum.StratumMethodSubmit)] =
 		func(ctx *gostratum.StratumContext, event gostratum.JsonRpcEvent) error {
-			return shareHandler.HandleSubmit(ctx, event)
+			if err := shareHandler.HandleSubmit(ctx, event); err != nil {
+				ctx.Logger.Error("error during submit", zap.Error(err)) // sink error
+			}
+			return nil
 		}
 
 	stratumConfig := gostratum.StratumListenerConfig{
@@ -107,7 +92,13 @@ func ListenAndServe(cfg BridgeConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ksApi.Start(ctx, func() {
-		clientHandler.NewBlockAvailable(ksApi)
+		template, err := ksApi.GetBlockTemplate(cfg.PoolWallet)
+		if err != nil {
+			logger.Error("failed fetching block template", zap.Error(err))
+			return
+		}
+		job := jobManager.AddJob(template.Block)
+		clientHandler.NewJobAvailable(job)
 	})
 
 	server := gostratum.NewListener(stratumConfig)

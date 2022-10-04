@@ -1,6 +1,7 @@
-package kaspastratum
+package poolworker
 
 import (
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -30,6 +31,11 @@ var blockCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "ks_blocks_mined",
 	Help: "Number of blocks mined over time",
 }, workerLabels)
+
+var blockGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "ks_mined_blocks_gauge",
+	Help: "Gauge containing 1 unique instance per block mined",
+}, append(workerLabels, "nonce", "bluescore"))
 
 var disconnectCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "ks_worker_disconnect_counter",
@@ -103,8 +109,12 @@ func RecordWeakShare(worker *gostratum.StratumContext) {
 	invalidCounter.With(labels).Inc()
 }
 
-func RecordBlockFound(worker *gostratum.StratumContext) {
+func RecordBlockFound(worker *gostratum.StratumContext, nonce, bluescore uint64) {
 	blockCounter.With(commonLabels(worker)).Inc()
+	labels := commonLabels(worker)
+	labels["nonce"] = fmt.Sprintf("%d", nonce)
+	labels["bluescore"] = fmt.Sprintf("%d", bluescore)
+	blockGauge.With(labels).Set(1)
 }
 
 func RecordDisconnect(worker *gostratum.StratumContext) {
@@ -143,12 +153,12 @@ func RecordBalances(response *appmessage.GetBalancesByAddressesResponseMessage) 
 
 var promInit sync.Once
 
-func StartPromServer(log *zap.SugaredLogger, port string) {
+func StartPromServer(log *zap.Logger, port string) {
 	go func() { // prom http handler, separate from the main router
 		promInit.Do(func() {
 			logger := log.With(zap.String("server", "prometheus"))
 			http.Handle("/metrics", promhttp.Handler())
-			logger.Info("hosting prom stats on ", port, "/metrics")
+			logger.Info(fmt.Sprintf("hosting prom stats on %s:/metrics", port))
 			if err := http.ListenAndServe(port, nil); err != nil {
 				logger.Error("error serving prom metrics", zap.Error(err))
 			}

@@ -2,6 +2,7 @@ package gostratum
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -26,7 +27,7 @@ type StratumStats struct {
 }
 
 type StratumListenerConfig struct {
-	Logger         *zap.SugaredLogger
+	Logger         *zap.Logger
 	HandlerMap     StratumHandlerMap
 	ClientListener StratumClientListener
 	StateGenerator StateGenerator
@@ -35,8 +36,6 @@ type StratumListenerConfig struct {
 
 type StratumListener struct {
 	StratumListenerConfig
-
-	clients           sync.Map
 	shuttingDown      bool
 	disconnectChannel DisconnectChannel
 	stats             StratumStats
@@ -46,7 +45,6 @@ type StratumListener struct {
 func NewListener(cfg StratumListenerConfig) *StratumListener {
 	listener := &StratumListener{
 		StratumListenerConfig: cfg,
-		clients:               sync.Map{},
 		workerGroup:           sync.WaitGroup{},
 		disconnectChannel:     make(DisconnectChannel),
 	}
@@ -103,8 +101,7 @@ func (s *StratumListener) newClient(ctx context.Context, connection net.Conn) {
 		onDisconnect: s.disconnectChannel,
 	}
 
-	s.Logger.Info("new client connecting - ", addr)
-	s.clients.Store(addr, &clientContext)
+	s.Logger.Info(fmt.Sprintf("new client connecting - %s", addr))
 
 	if s.ClientListener != nil { // TODO: should this be before we spawn the handler?
 		s.ClientListener.OnConnect(clientContext)
@@ -130,14 +127,10 @@ func (s *StratumListener) disconnectListener(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case client := <-s.disconnectChannel:
-			_, exists := s.clients.LoadAndDelete(client)
-			if exists {
-				s.Logger.Info("client disconnecting - ", client.RemoteAddr)
-				s.stats.Disconnects++
-
-				if s.ClientListener != nil {
-					s.ClientListener.OnDisconnect(client)
-				}
+			s.Logger.Info(fmt.Sprintf("client disconnecting - %s", client.RemoteAddr))
+			s.stats.Disconnects++
+			if s.ClientListener != nil {
+				s.ClientListener.OnDisconnect(client)
 			}
 		}
 	}

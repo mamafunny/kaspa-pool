@@ -1,4 +1,4 @@
-package kaspastratum
+package poolworker
 
 import (
 	"context"
@@ -18,10 +18,10 @@ import (
 
 var pg *pgx.Conn
 var rd *redis.Client
-var logger *zap.SugaredLogger
+var logger *zap.Logger
 
 func TestMain(m *testing.M) {
-	logger, _ = configureZap(BridgeConfig{})
+	logger, _ = configureZap(WorkerConfig{})
 	var err error
 	pg, err = pgx.Connect(pgx.ConnConfig{
 		Host:     "localhost",
@@ -52,7 +52,20 @@ type testContext struct {
 	ctx    *gostratum.StratumContext
 	conn   *gostratum.MockConnection
 	block  *appmessage.RPCBlock
-	jobIdx int
+	jobMan *JobManager
+	job    *WorkJob
+}
+
+func loadExampleHeader() *appmessage.RPCBlockHeader {
+	headerRaw, err := ioutil.ReadFile("example_header.json")
+	if err != nil {
+		panic(err)
+	}
+	header := appmessage.RPCBlockHeader{}
+	if err := json.Unmarshal(headerRaw, &header); err != nil {
+		panic(err)
+	}
+	return &header
 }
 
 func newTestContext(t *testing.T) *testContext {
@@ -67,8 +80,8 @@ func newTestContext(t *testing.T) *testContext {
 		t.Fatal(err)
 	}
 
-	state := GetMiningState(ctx)
-	jobIdx := state.AddJob(&appmessage.RPCBlock{
+	jm := NewJobManager()
+	jobIdx := jm.AddJob(&appmessage.RPCBlock{
 		Header: &header,
 	})
 
@@ -76,13 +89,14 @@ func newTestContext(t *testing.T) *testContext {
 		ctx:    ctx,
 		conn:   conn,
 		block:  &appmessage.RPCBlock{Header: &header},
-		jobIdx: jobIdx,
+		jobMan: jm,
+		job:    jobIdx,
 	}
 }
 
 func TestShareLogging(t *testing.T) {
-	sh := newShareHandler(nil, rd, pg)
 	tc := newTestContext(t)
+	sh := newShareHandler(nil, tc.jobMan, rd, pg)
 
 	// Submit a good share, should be recorded and respond w/ no errors
 	tc.conn.AsyncReadTestDataFromBuffer(func(b []byte) {
@@ -96,7 +110,7 @@ func TestShareLogging(t *testing.T) {
 	})
 	nonce := time.Now().Unix()
 	err := sh.HandleSubmit(tc.ctx, gostratum.NewEvent("1", "mining.submit", []any{
-		"", fmt.Sprintf("%d", tc.jobIdx), fmt.Sprintf("%d", nonce),
+		"", fmt.Sprintf("%d", tc.job.Id), fmt.Sprintf("%d", nonce),
 	}))
 	if err != nil {
 		t.Fatalf("submit failed, should have allowed share submission")
@@ -113,7 +127,7 @@ func TestShareLogging(t *testing.T) {
 		}
 	})
 	err = sh.HandleSubmit(tc.ctx, gostratum.NewEvent("1", "mining.submit", []any{
-		"", fmt.Sprintf("%d", tc.jobIdx), fmt.Sprintf("%d", nonce),
+		"", fmt.Sprintf("%d", tc.job.Id), fmt.Sprintf("%d", nonce),
 	}))
 	if err != nil { // allow the submission but return error to the miner
 		t.Fatalf("submit failed, should have allowed share submission")

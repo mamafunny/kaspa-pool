@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-config
+  namespace: monitoring
 data:
   grafana.ini: |
     ##################### Grafana Configuration Example #####################
@@ -146,10 +147,10 @@ data:
     #################################### Security ####################################
     [security]
     # default admin user, created on startup
-    ;admin_user = admin
+    admin_user = pooladmin
 
     # default admin password, can be changed before first start of grafana,  or in profile settings
-    ;admin_password = admin
+    admin_password = mzm34s31ElfC3B00hYhy81o
 
     # used for signing
     ;secret_key = SW2YcwTIb9zpOOhoPsMm
@@ -195,7 +196,7 @@ data:
     ;login_hint = email or username
 
     # Default UI theme ("dark" or "light")
-    ;default_theme = dark
+    default_theme = dark
 
     [auth]
     # Set to true to disable (hide) the login form, useful if you use OAuth, defaults to false
@@ -207,13 +208,13 @@ data:
     #################################### Anonymous Auth ##########################
     [auth.anonymous]
     # enable anonymous access
-    ;enabled = false
+    enabled = true
 
     # specify organization name that should be used for unauthenticated users
-    ;org_name = Main Org.
+    org_name = Main Org.
 
     # specify role for unauthenticated users
-    ;org_role = Viewer
+    org_role = Viewer
 
     #################################### Github Auth ##########################
     [auth.github]
