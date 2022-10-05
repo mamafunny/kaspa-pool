@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v5"
 	"github.com/kaspanet/kaspad/app/appmessage"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
+	"github.com/kaspanet/kaspad/domain/consensus/utils/consensushashing"
 	"github.com/kaspanet/kaspad/domain/consensus/utils/pow"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
+	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -101,13 +103,7 @@ func (sh *shareHandler) checkStales(ctx *gostratum.StratumContext, si *submitInf
 	}
 	if val > 0 { // val > 0 means new value
 		// credit to miner
-		_, err := sh.pgClient.Exec(`INSERT into shares(wallet, bluescore, nonce, timestamp) 
-									 VALUES ($1, $2, $3, $4)`,
-			ctx.WalletAddr, si.block.Header.BlueScore, si.nonceVal, time.Now())
-		if err != nil {
-			return errors.Wrap(err, "failed writing share to pg")
-		}
-		return nil
+		return postgres.PutShare(sh.pgClient, ctx.WalletAddr, si.block.Header.BlueScore, si.nonceVal, 4)
 	}
 	return ErrDupeShare
 }
@@ -202,7 +198,16 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 
 	// :)
 	ctx.Logger.Info("block accepted")
-	RecordBlockFound(ctx, block.Header.Nonce(), block.Header.BlueScore())
+	blockhash := consensushashing.BlockHash(block)
+	blockFee := uint64(0)
+	for _, t := range block.Transactions {
+		if len(t.Inputs) == 0 {
+			// no inputs means that the transaction originated from the coinbase
+		}
+		blockFee += t.Fee
+	}
+
+	RecordBlockFound(ctx, block.Header.Nonce(), block.Header.BlueScore(), blockhash.String())
 	return ctx.Reply(gostratum.JsonRpcResponse{
 		Result: true,
 	})

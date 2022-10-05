@@ -1,0 +1,2 @@
+{"level":"info","ts":"2022-10-04T22:51:06Z","msg":"checking kaspad sync state","component":"kaspaapi::16110"}
+{"level":"info","ts":"2022-10-04T22:51:06Z","msg":"kaspad synced, starting server","component":"kaspaapi::16110"}

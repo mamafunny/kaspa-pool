@@ -9,6 +9,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/mattn/go-colorable"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
+	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -59,7 +60,7 @@ func ListenAndServe(cfg WorkerConfig) error {
 		go http.ListenAndServe(cfg.HealthCheckPort, nil)
 	}
 
-	pg, err := configurePostgres(cfg.PostgresConfig)
+	pg, err := postgres.ConfigurePostgres(cfg.PostgresConfig)
 	if err != nil {
 		return errors.Wrap(err, "failed connecting to postgres")
 	}
@@ -102,6 +103,6 @@ func ListenAndServe(cfg WorkerConfig) error {
 	})
 
 	server := gostratum.NewListener(stratumConfig)
-	server.Listen(context.Background())
-	return nil
+
+	return server.Listen(context.Background())
 }

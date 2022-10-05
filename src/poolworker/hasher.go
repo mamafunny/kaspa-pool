@@ -74,10 +74,7 @@ func SerializeBlockHeader(template *appmessage.RPCBlock) ([]byte, error) {
 	write64(hasher, uint64(len(hh)))
 	writeHexString(hasher, bw)
 	writeHexString(hasher, template.Header.PruningPoint)
-
-	final := hasher.Sum(nil)
-	//log.Println(final)
-	return final, nil
+	return hasher.Sum(nil), nil
 }
 
 func GenerateJobHeader(headerData []byte) []uint64 {

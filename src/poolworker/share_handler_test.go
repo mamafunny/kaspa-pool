@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v5"
 	"github.com/kaspanet/kaspad/app/appmessage"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
 	"github.com/pkg/errors"
@@ -23,13 +23,7 @@ var logger *zap.Logger
 func TestMain(m *testing.M) {
 	logger, _ = configureZap(WorkerConfig{})
 	var err error
-	pg, err = pgx.Connect(pgx.ConnConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		Database: "kaspa-pool",
-	})
+	pg, err = pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/kaspa-pool")
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +36,7 @@ func TestMain(m *testing.M) {
 		panic(errors.Wrapf(err.Err(), "FATAL, failed to connect to redis at %s", ":6379"))
 	}
 	rd.Del(context.Background(), "share_buffer")
-	defer pg.Close()
+	defer pg.Close(context.Background())
 	defer rd.Close()
 
 	m.Run()

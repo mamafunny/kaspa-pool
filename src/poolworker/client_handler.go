@@ -14,8 +14,6 @@ import (
 
 var bigJobRegex = regexp.MustCompile(".*BzMiner.*")
 
-const balanceDelay = time.Minute
-
 type clientListener struct {
 	logger        *zap.Logger
 	shareHandler  *shareHandler
