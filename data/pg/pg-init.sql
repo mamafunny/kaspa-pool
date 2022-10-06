@@ -12,16 +12,6 @@ CREATE TABLE IF NOT EXISTS shares (
 CREATE UNIQUE INDEX shares_bluescore_nonce_idx ON shares(bluescore int8_ops,nonce int8_ops);
 CREATE INDEX shares_wallet_idx ON shares(wallet text_ops);
 
--- Blocks -------------------------------------------------------
-
-CREATE TABLE blocks (
-    hash text PRIMARY KEY,
-    timestamp timestamp without time zone NOT NULL,
-    miner text NOT NULL,
-    payee text NOT NULL,
-    block_json jsonb NOT NULL,
-    bluescore bigint NOT NULL
-);
 
 -- Ledger -------------------------------------------------------
 
@@ -37,5 +27,33 @@ CREATE TABLE ledger (
     tx_id text UNIQUE
 );
 
-CREATE UNIQUE INDEX ledger_tx_id_key ON ledger(tx_id text_ops);
 CREATE UNIQUE INDEX ledger_bluescore_payee_idx ON ledger(bluescore int8_ops,payee text_ops);
+
+-- Coinbase -------------------------------------------------------
+
+CREATE TABLE coinbase_payments (
+    tx text PRIMARY KEY UNIQUE,
+    wallet text NOT NULL,
+    amount bigint NOT NULL,
+    daascore bigint NOT NULL
+);
+
+-- Indices -------------------------------------------------------
+
+CREATE UNIQUE INDEX coinbase_payments_tx_key ON coinbase_payments(tx text_ops);
+
+-- Blocks -------------------------------------------------------
+CREATE TYPE block_status AS ENUM ('unconfirmed', 'confirmed', 'paid', 'error');
+
+CREATE TABLE blocks (
+    hash text PRIMARY KEY,
+    timestamp timestamp without time zone NOT NULL,
+    miner text NOT NULL,
+    payee text NOT NULL,
+    round_time interval NOT NULL,
+    block_json jsonb NOT NULL,
+    bluescore bigint NOT NULL,
+    luck double precision NOT NULL,
+    status block_status DEFAULT 'unconfirmed'::block_status,
+    coinbase_reward text REFERENCES coinbase_payments(tx)
+);

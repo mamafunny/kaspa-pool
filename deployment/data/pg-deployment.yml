@@ -19,7 +19,7 @@ metadata:
   labels:
     app: postgres
 data:
-  POSTGRES_DB: kaspa-db
+  POSTGRES_DB: kaspapool
   POSTGRES_USER: pooladmin
   POSTGRES_PASSWORD: a0R4Jk10MG1qODg5NEFecEMxWGlQdFp1OTFESEJwUWU5cyF1R0k2RA
 ---
@@ -51,10 +51,15 @@ spec:
             - mountPath: /var/lib/postgresql/data
               name: pg-persist-vol
               subPath: postgres
+            - mountPath: /docker-entrypoint-initdb.d
+              name: pg-bootstrap-vol
       volumes:
         - name: pg-persist-vol
           persistentVolumeClaim:
             claimName: pg-persist-claim
+        - name: pg-bootstrap-vol
+          configMap:
+            name: postgres-bootstrap-config
 ---
 apiVersion: v1
 kind: Service

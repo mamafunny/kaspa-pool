@@ -3,7 +3,6 @@ package cashier
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/kaspanet/kaspad/cmd/kaspawallet/daemon/client"
 	"github.com/kaspanet/kaspad/cmd/kaspawallet/daemon/pb"
 	"github.com/onemorebsmith/kaspa-pool/src/postgres"
@@ -18,7 +17,6 @@ type CashierClient struct {
 	config  CashierConfig
 	client  pb.KaspawalletdClient
 	cleanup func()
-	pg      *pgx.Conn
 }
 
 type CashierConfig struct {
@@ -38,20 +36,12 @@ func NewCashierClient(cfg CashierConfig) (Cashier, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed connecting to kaspawallet daemon")
 	}
-
-	pg, err := postgres.ConfigurePostgres(cfg.PostgresConfig)
-	if err != nil {
-		return nil, err
-	}
+	postgres.ConfigurePostgres(cfg.PostgresConfig)
 
 	return &CashierClient{
-		config: cfg,
-		client: client,
-		pg:     pg,
-		cleanup: func() {
-			deferred()
-			pg.Close(context.Background())
-		},
+		config:  cfg,
+		client:  client,
+		cleanup: deferred,
 	}, nil
 }
 

@@ -5,38 +5,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"testing"
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/jackc/pgx/v5"
 	"github.com/kaspanet/kaspad/app/appmessage"
+	"github.com/kaspanet/kaspad/domain/consensus/utils/consensushashing"
+	"github.com/onemorebsmith/kaspa-pool/src/common"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
+	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
-var pg *pgx.Conn
 var rd *redis.Client
 var logger *zap.Logger
 
 func TestMain(m *testing.M) {
-	logger, _ = configureZap(WorkerConfig{})
-	var err error
-	pg, err = pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/kaspa-pool")
-	if err != nil {
-		panic(err)
-	}
+	logger = common.ConfigureZap(zap.DebugLevel)
+	postgres.ConfigureDockerConnection()
 	rd = redis.NewClient(&redis.Options{
-		Addr:     ":6379",
-		Password: "eSYzVUxnUzgkb0RLV28meDE0SlVJeDEqd2FwTCVYM05YQVJE",
-		DB:       0, // use default DB
+		Addr: ":6379",
+		DB:   0, // use default DB
 	})
 	if err := rd.Ping(context.Background()); err.Err() != nil {
 		panic(errors.Wrapf(err.Err(), "FATAL, failed to connect to redis at %s", ":6379"))
 	}
 	rd.Del(context.Background(), "share_buffer")
-	defer pg.Close(context.Background())
 	defer rd.Close()
 
 	m.Run()
@@ -60,6 +56,18 @@ func loadExampleHeader() *appmessage.RPCBlockHeader {
 		panic(err)
 	}
 	return &header
+}
+
+func loadExampleBlock() *appmessage.RPCBlock {
+	headerRaw, err := ioutil.ReadFile("example_block.json")
+	if err != nil {
+		panic(err)
+	}
+	block := appmessage.RPCBlock{}
+	if err := json.Unmarshal(headerRaw, &block); err != nil {
+		panic(err)
+	}
+	return &block
 }
 
 func newTestContext(t *testing.T) *testContext {
@@ -90,7 +98,7 @@ func newTestContext(t *testing.T) *testContext {
 
 func TestShareLogging(t *testing.T) {
 	tc := newTestContext(t)
-	sh := newShareHandler(nil, tc.jobMan, rd, pg)
+	sh := newShareHandler(nil, tc.jobMan, rd)
 
 	// Submit a good share, should be recorded and respond w/ no errors
 	tc.conn.AsyncReadTestDataFromBuffer(func(b []byte) {
@@ -125,5 +133,28 @@ func TestShareLogging(t *testing.T) {
 	}))
 	if err != nil { // allow the submission but return error to the miner
 		t.Fatalf("submit failed, should have allowed share submission")
+	}
+}
+
+func TestBlockSerialization(t *testing.T) {
+	b, err := appmessage.RPCBlockToDomainBlock(loadExampleBlock())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blockhash := consensushashing.BlockHash(b)
+	log.Println(blockhash)
+}
+
+func TestBlockLogging(t *testing.T) {
+	// clear any residual data
+	if err := postgres.DoExec(context.Background(), "DELETE FROM blocks"); err != nil {
+		t.Fatalf("failed to clean blocks table before test execution: %s", err)
+	}
+
+	tc := newTestContext(t)
+	block, _ := appmessage.RPCBlockToDomainBlock(tc.block)
+	if err := postgres.PutBlock(context.Background(), block, "test_miner", "pool_wallet", time.Minute*15); err != nil {
+		t.Fatal(err)
 	}
 }

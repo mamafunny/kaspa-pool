@@ -1,4 +1,4 @@
-package poolworker
+package kaspaapi
 
 import (
 	"context"
@@ -37,31 +37,31 @@ func NewKaspaAPI(address string, logger *zap.Logger) (*KaspaApi, error) {
 func (ks *KaspaApi) Start(ctx context.Context, blockCb func()) {
 	ks.waitForSync(true)
 	go ks.startBlockTemplateListener(ctx, blockCb)
-	go ks.startStatsThread(ctx)
+	//go ks.startStatsThread(ctx)
 }
 
-func (ks *KaspaApi) startStatsThread(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	for {
-		select {
-		case <-ctx.Done():
-			ks.logger.Warn("context cancelled, stopping stats thread")
-			return
-		case <-ticker.C:
-			dagResponse, err := ks.kaspad.GetBlockDAGInfo()
-			if err != nil {
-				ks.logger.Warn("failed to get network hashrate from kaspa, prom stats will be out of date", zap.Error(err))
-				continue
-			}
-			response, err := ks.kaspad.EstimateNetworkHashesPerSecond(dagResponse.TipHashes[0], 1000)
-			if err != nil {
-				ks.logger.Warn("failed to get network hashrate from kaspa, prom stats will be out of date", zap.Error(err))
-				continue
-			}
-			RecordNetworkStats(response.NetworkHashesPerSecond, dagResponse.BlockCount, dagResponse.Difficulty)
-		}
-	}
-}
+// func (ks *KaspaApi) startStatsThread(ctx context.Context) {
+// 	ticker := time.NewTicker(30 * time.Second)
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			ks.logger.Warn("context cancelled, stopping stats thread")
+// 			return
+// 		case <-ticker.C:
+// 			dagResponse, err := ks.kaspad.GetBlockDAGInfo()
+// 			if err != nil {
+// 				ks.logger.Warn("failed to get network hashrate from kaspa, prom stats will be out of date", zap.Error(err))
+// 				continue
+// 			}
+// 			response, err := ks.kaspad.EstimateNetworkHashesPerSecond(dagResponse.TipHashes[0], 1000)
+// 			if err != nil {
+// 				ks.logger.Warn("failed to get network hashrate from kaspa, prom stats will be out of date", zap.Error(err))
+// 				continue
+// 			}
+// 			RecordNetworkStats(response.NetworkHashesPerSecond, dagResponse.BlockCount, dagResponse.Difficulty)
+// 		}
+// 	}
+// }
 
 func (ks *KaspaApi) reconnect() error {
 	if ks.kaspad != nil {

@@ -30,6 +30,10 @@ func main() {
 	flag.StringVar(&cfg.RPCServer, "kaspa", cfg.RPCServer, "address of the kaspad node, default `localhost:16110`")
 	flag.StringVar(&cfg.PromPort, "prom", cfg.PromPort, "address to serve prom stats, default `:2112`")
 	flag.StringVar(&cfg.HealthCheckPort, "hcp", cfg.HealthCheckPort, `(rarely used) if defined will expose a health check on /readyz, default ""`)
+	flag.StringVar(&cfg.PoolWallet, "wallet", cfg.PoolWallet, `pool wallet to use for all block payouts"`)
+	flag.StringVar(&cfg.PostgresConfig, "pg", cfg.PostgresConfig, `config string for the postgres connection"`)
+	flag.StringVar(&cfg.RedisConfig, "redis", cfg.RedisConfig, `config string for the redis connection"`)
+
 	flag.Parse()
 
 	log.Println("----------------------------------")
@@ -38,6 +42,8 @@ func main() {
 	log.Printf("\tstratum:       %s", cfg.StratumPort)
 	log.Printf("\tprom:          %s", cfg.PromPort)
 	log.Printf("\thealth check:  %s", cfg.HealthCheckPort)
+	log.Printf("\twallet:  		 %s", cfg.PoolWallet)
+	log.Printf("\tredis:  		 %s", cfg.RedisConfig)
 	log.Println("----------------------------------")
 
 	if err := poolworker.ListenAndServe(cfg); err != nil {

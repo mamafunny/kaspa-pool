@@ -4,73 +4,49 @@ import (
 	"context"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/mattn/go-colorable"
+	"github.com/onemorebsmith/kaspa-pool/src/common"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
 	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-const version = "v0.1"
-
-func configureZap(cfg WorkerConfig) (*zap.Logger, func()) {
-	pe := zap.NewProductionEncoderConfig()
-	pe.EncodeTime = zapcore.RFC3339TimeEncoder
-	fileEncoder := zapcore.NewJSONEncoder(pe)
-	consoleEncoder := zapcore.NewConsoleEncoder(pe)
-
-	// log file fun
-	logFile, err := os.OpenFile("bridge.log", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
-	if err != nil {
-		panic(err)
+func configureRedis(path string) (*redis.Client, error) {
+	rd := redis.NewClient(&redis.Options{
+		Addr: path,
+		DB:   0, // use default DB
+	})
+	if err := rd.Ping(context.Background()); err.Err() != nil {
+		return nil, errors.Wrap(err.Err(), "failed to ping redis")
 	}
-	core := zapcore.NewTee(
-		zapcore.NewCore(fileEncoder, zapcore.AddSync(logFile), zap.InfoLevel),
-		zapcore.NewCore(consoleEncoder, zapcore.AddSync(colorable.NewColorableStdout()), zap.InfoLevel),
-	)
-	return zap.New(core), func() { logFile.Close() }
-}
 
-func configureRedis(cfg RedisConfig) (*redis.Client, error) {
-	return nil, nil
+	return rd, nil
 }
 
 func ListenAndServe(cfg WorkerConfig) error {
-	logger, logCleanup := configureZap(cfg)
-	defer logCleanup()
-
+	logger := common.ConfigureZap(zap.InfoLevel)
 	if cfg.PromPort != "" {
 		StartPromServer(logger, cfg.PromPort)
 	}
-
 	ksApi, err := NewKaspaAPI(cfg.RPCServer, logger)
 	if err != nil {
 		return err
 	}
-
-	if cfg.HealthCheckPort != "" {
-		logger.Info("enabling health check on port " + cfg.HealthCheckPort)
-		http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		})
-		go http.ListenAndServe(cfg.HealthCheckPort, nil)
-	}
-
-	pg, err := postgres.ConfigurePostgres(cfg.PostgresConfig)
-	if err != nil {
-		return errors.Wrap(err, "failed connecting to postgres")
-	}
+	postgres.ConfigurePostgres(cfg.PostgresConfig)
 	rd, err := configureRedis(cfg.RedisConfig)
 	if err != nil {
 		return errors.Wrap(err, "failed connecting to redis")
 	}
 
+	if cfg.HealthCheckPort != "" {
+		logger.Info("enabling health check on port " + cfg.HealthCheckPort)
+		beginReadyzHandler(cfg, rd)
+	}
+
 	jobManager := NewJobManager()
-	shareHandler := newShareHandler(ksApi, jobManager, rd, pg)
+	shareHandler := newShareHandler(ksApi, jobManager, rd)
 	clientHandler := newClientListener(logger, shareHandler)
 	handlers := gostratum.DefaultHandlers()
 	// override the submit handler with an actual useful handler
@@ -105,4 +81,28 @@ func ListenAndServe(cfg WorkerConfig) error {
 	server := gostratum.NewListener(stratumConfig)
 
 	return server.Listen(context.Background())
+}
+
+func beginReadyzHandler(cfg WorkerConfig, rd *redis.Client) {
+	http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		pg, err := postgres.GetConnection(r.Context())
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(errors.Wrap(err, "failed pinging postgres").Error()))
+			return
+		}
+		defer pg.Close(r.Context())
+		if err := pg.Ping(r.Context()); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(errors.Wrap(err, "failed pinging postgres").Error()))
+			return
+		}
+		if err := rd.Ping(r.Context()); err.Err() != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(errors.Wrap(err.Err(), "failed pinging redis").Error()))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	go http.ListenAndServe(cfg.HealthCheckPort, nil)
 }

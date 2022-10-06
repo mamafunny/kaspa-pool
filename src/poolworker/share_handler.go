@@ -1,13 +1,13 @@
 package poolworker
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/jackc/pgx/v5"
 	"github.com/kaspanet/kaspad/app/appmessage"
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/domain/consensus/utils/consensushashing"
@@ -23,17 +23,17 @@ type shareHandler struct {
 	tipBlueScore uint64
 	shareSet     ZSet
 	redisClient  *redis.Client
-	pgClient     *pgx.Conn
 	jobBuffer    *JobManager
+	lastBlock    time.Time
 }
 
-func newShareHandler(kaspa *KaspaApi, jm *JobManager, rd *redis.Client, pg *pgx.Conn) *shareHandler {
+func newShareHandler(kaspa *KaspaApi, jm *JobManager, rd *redis.Client) *shareHandler {
 	return &shareHandler{
 		kaspa:       kaspa,
 		redisClient: rd,
 		jobBuffer:   jm,
 		shareSet:    NewZSet(rd, "share_buffer"),
-		pgClient:    pg,
+		lastBlock:   time.Now(),
 	}
 }
 
@@ -84,7 +84,7 @@ var (
 
 // the max difference between tip blue score and job blue score that we'll accept
 // anything greater than this is considered a stale
-const workWindow = 8
+const workWindow = 100
 
 func (sh *shareHandler) checkStales(ctx *gostratum.StratumContext, si *submitInfo) error {
 	tip := sh.tipBlueScore
@@ -103,7 +103,7 @@ func (sh *shareHandler) checkStales(ctx *gostratum.StratumContext, si *submitInf
 	}
 	if val > 0 { // val > 0 means new value
 		// credit to miner
-		return postgres.PutShare(sh.pgClient, ctx.WalletAddr, si.block.Header.BlueScore, si.nonceVal, 4)
+		return postgres.PutShare(context.Background(), ctx.WalletAddr, si.block.Header.BlueScore, si.nonceVal, 4)
 	}
 	return ErrDupeShare
 }
@@ -174,13 +174,14 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 	block *externalapi.DomainBlock, nonce uint64, eventId any) error {
 	mutable := block.Header.ToMutable()
 	mutable.SetNonce(nonce)
-	err := sh.kaspa.SubmitBlock(&externalapi.DomainBlock{
+	block = &externalapi.DomainBlock{
 		Header:       mutable.ToImmutable(),
 		Transactions: block.Transactions,
-	})
+	}
+	err := sh.kaspa.SubmitBlock(block)
+	blockhash := consensushashing.BlockHash(block)
 	// print after the submit to get it submitted faster
-	ctx.Logger.Info(fmt.Sprintf("submitted block to kaspad %s", ctx.String()))
-	ctx.Logger.Info(fmt.Sprintf("Submitted nonce: %d", nonce))
+	ctx.Logger.Info(fmt.Sprintf("Submitted block %s, nonce: %d", blockhash.String(), nonce))
 
 	if err != nil {
 		// :'(
@@ -195,18 +196,13 @@ func (sh *shareHandler) submit(ctx *gostratum.StratumContext,
 			return ctx.ReplyBadShare(eventId)
 		}
 	}
-
 	// :)
 	ctx.Logger.Info("block accepted")
-	blockhash := consensushashing.BlockHash(block)
-	blockFee := uint64(0)
-	for _, t := range block.Transactions {
-		if len(t.Inputs) == 0 {
-			// no inputs means that the transaction originated from the coinbase
-		}
-		blockFee += t.Fee
+	if err := postgres.PutBlock(context.Background(), block, ctx.WalletAddr, ctx.WalletAddr, time.Since(sh.lastBlock)); err != nil {
+		ctx.Logger.Error("failed logging block to pg", zap.Error(err))
 	}
 
+	sh.lastBlock = time.Now().UTC()
 	RecordBlockFound(ctx, block.Header.Nonce(), block.Header.BlueScore(), blockhash.String())
 	return ctx.Reply(gostratum.JsonRpcResponse{
 		Result: true,

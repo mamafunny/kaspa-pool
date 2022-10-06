@@ -6,40 +6,49 @@ metadata:
 data:
   redis-config: ""
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: redis
   namespace: data
 spec:
-  containers:
-  - name: redis
-    image: redis:latest
-    command:
-      - redis-server
-      - "/redis-master/redis.conf"
-    env:
-    - name: MASTER
-      value: "true"
-    ports:
-    - containerPort: 6379
-    resources:
-      limits:
-        cpu: 250m
-    volumeMounts:
-    - mountPath: /redis-master-data
-      name: data
-    - mountPath: /redis-master
-      name: config
-  volumes:
-    - name: data
-      emptyDir: {}
-    - name: config
-      configMap:
-        name: redis-config
-        items:
-        - key: redis-config
-          path: redis.conf
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:latest
+          command:
+            - redis-server
+            - "/redis-master/redis.conf"
+          env:
+          - name: MASTER
+            value: "true"
+          ports:
+          - containerPort: 6379
+          resources:
+            limits:
+              cpu: 250m
+          volumeMounts:
+          - mountPath: /redis-master-data
+            name: data
+          - mountPath: /redis-master
+            name: config
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: redis-config
+            items:
+            - key: redis-config
+              path: redis.conf
 ---
 apiVersion: v1
 kind: Service

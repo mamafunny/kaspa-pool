@@ -1,0 +1,239 @@
+{
+    "Header": {
+        "Bits": 453080112,
+        "Nonce": 32155915658362189,
+        "Parents": [
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "3514ef1f84bfb35ef81ad3c682cc28aa9b5226b65a353e7906f5342c8ba66fd4"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "bc2a71cc0299469b2a76e0c3b0b320776326c9397be493d25c3e683146b36511"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "0bd83108544570ab13e218419971e38a44c2b4587fe5f4c92d2d0327668d287b"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6c584072a7f091bb78f1c192d29c26574970be9de39ed492baa057648e39e1d0"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6c584072a7f091bb78f1c192d29c26574970be9de39ed492baa057648e39e1d0"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "0ddda15dbeb1dc196d562f9a66c2801fff8603c3f5e9baaebc22c860b6d424b2"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "f720725efc3d1c050abbb1c23389912fede132b324221023270db3922869b180"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "d771b2fec9f28de118cc2feb70e623edf3a616b4d91b04ebc47aa6700e2692b9"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "d771b2fec9f28de118cc2feb70e623edf3a616b4d91b04ebc47aa6700e2692b9"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6cf2b0a372505c12dd8051dd7cbd5349809e8937db909d9c7464b0163b8d536a"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6cf2b0a372505c12dd8051dd7cbd5349809e8937db909d9c7464b0163b8d536a"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6cf2b0a372505c12dd8051dd7cbd5349809e8937db909d9c7464b0163b8d536a"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6cf2b0a372505c12dd8051dd7cbd5349809e8937db909d9c7464b0163b8d536a"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6cf2b0a372505c12dd8051dd7cbd5349809e8937db909d9c7464b0163b8d536a"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "6cf2b0a372505c12dd8051dd7cbd5349809e8937db909d9c7464b0163b8d536a"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "e2bad4c15afcccda57aa89b4cab219af96560d0dddbc8563e17f8f5f0290eb11"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "36161178fac70818390a3ecb743d041d4edf3e8e5f1d7564984d5de14263ac0f"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "36161178fac70818390a3ecb743d041d4edf3e8e5f1d7564984d5de14263ac0f"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "00eca12dc79701af7b105c98a58a7f58a02eda88730c53ecf604ba7d4b1afdab"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "00eca12dc79701af7b105c98a58a7f58a02eda88730c53ecf604ba7d4b1afdab"
+                ]
+            },
+            {
+                "ParentHashes": [
+                    "00eca12dc79701af7b105c98a58a7f58a02eda88730c53ecf604ba7d4b1afdab"
+                ]
+            }
+        ],
+        "Version": 1,
+        "BlueWork": "25a97c873eca689054",
+        "DAAScore": 28564862,
+        "BlueScore": 27041704,
+        "Timestamp": 1665016487339,
+        "PruningPoint": "24519ddc72168bae722ee9b42bfa0b9c22b578797c9bf7fad8e552320a1c303d",
+        "HashMerkleRoot": "b306f30af4c9b4f28cae645e813b34da31564b42fd4fbaf6e88d80e8e8f74357",
+        "UTXOCommitment": "f7519aee8d0f1c40d86e58b641b5557bbbf54f85dc5f379de9c4c5ab153840de",
+        "AcceptedIDMerkleRoot": "df3ff59dca4a0a3ccfbef3559e1b43174c7308a90d2b443e7500ab57c902077b"
+    },
+    "VerboseData": null,
+    "Transactions": [
+        {
+            "Gas": 0,
+            "Inputs": [],
+            "Outputs": [
+                {
+                    "Amount": 34922823143,
+                    "VerboseData": null,
+                    "ScriptPublicKey": {
+                        "Script": "20c62cf30e4e57c5922086460235d5157a62f2666aa22707cb9b588f6211fc0ed6ac",
+                        "Version": 0
+                    }
+                }
+            ],
+            "Payload": "a89f9c0100000000e7fd8f210800000000002220e0bf89fc75b0380d30711c916612cdaaf6ab65aed00544ce70e57eb14040b050ac302e31322e372f6f6e656d6f726562736d6974682f6b617370612d706f6f6c5f76302e31",
+            "Version": 0,
+            "LockTime": 0,
+            "VerboseData": null,
+            "SubnetworkID": "0100000000000000000000000000000000000000"
+        }
+    ]
+}

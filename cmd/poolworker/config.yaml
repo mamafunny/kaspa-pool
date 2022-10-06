@@ -1,6 +1,6 @@
     stratum_port:   :4444
     hcp:            :5556
     kaspad_address: :16110
-    redis_port:     :6379
-    postgres:       postgres://postgres:postgres@localhost:5432/kaspa-pool
+    redis:          :6379
+    postgres:       postgres://postgres:postgres@localhost:5432/kaspapool
     pool_wallet:    kaspa:qrstlz0uwkcrsrfswywfzesjek40d2m94mgq23xwwrjhav2qgzc9q4mxhjpau

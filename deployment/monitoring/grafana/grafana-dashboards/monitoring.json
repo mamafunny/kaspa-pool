@@ -1752,7 +1752,7 @@
           "uid": "P1809F7CD0C75ACF3"
         },
         "definition": "ks_valid_share_counter",
-        "hide": 0,
+        "ks_blocks": 0,
         "includeAll": true,
         "multi": false,
         "name": "wallet_filter",

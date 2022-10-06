@@ -35,7 +35,7 @@ var blockCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 var blockGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "ks_mined_blocks_gauge",
 	Help: "Gauge containing 1 unique instance per block mined",
-}, append(workerLabels, "nonce", "bluescore"))
+}, append(workerLabels, "nonce", "bluescore", "hash"))
 
 var disconnectCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "ks_worker_disconnect_counter",
