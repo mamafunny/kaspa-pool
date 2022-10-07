@@ -5,6 +5,7 @@ import (
 
 	"github.com/kaspanet/kaspad/cmd/kaspawallet/daemon/client"
 	"github.com/kaspanet/kaspad/cmd/kaspawallet/daemon/pb"
+	"github.com/onemorebsmith/kaspa-pool/src/common"
 	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
 )
@@ -20,11 +21,10 @@ type CashierClient struct {
 }
 
 type CashierConfig struct {
-	DaemonAddress  string `yaml:"daemon_address"`
-	PoolAddress    string `yaml:"pool_wallet_address"`
-	Password       string `yaml:"password"`
-	Mock           bool   `yaml:"use_mock"`
-	PostgresConfig string `yaml:"postgres"`
+	common.CommonConfig `yaml:",inline"`
+	DaemonAddress       string `yaml:"kaspa_wallet_address"`
+	Password            string `yaml:"password"`
+	Mock                bool   `yaml:"use_mock"`
 }
 
 func NewCashierClient(cfg CashierConfig) (Cashier, error) {
@@ -49,7 +49,7 @@ func (cc *CashierClient) Send(ctx context.Context, address string, amount uint64
 	resp, err := cc.client.Send(ctx, &pb.SendRequest{
 		ToAddress: address,
 		From: []string{
-			cc.config.PoolAddress,
+			cc.config.PoolWallet,
 		},
 		Amount:                   amount,
 		Password:                 cc.config.Password,

@@ -29,19 +29,13 @@ func PutBlock(ctx context.Context, block *externalapi.DomainBlock, miner string,
 	})
 }
 
-type BlockStatusType string
-
-const (
-	BlockStatusUnconfirmed BlockStatusType = "unconfirmed"
-	BlockStatusConfirmed   BlockStatusType = "confirmed"
-	BlockStatusPaid        BlockStatusType = "paid"
-	BlockStatusError       BlockStatusType = "error"
-)
-
-func GetBlocks(ctx context.Context, status BlockStatusType, limit int) ([]*model.Block, error) {
-	var fetched []*model.Block
+func GetUnconfirmedBlocks(ctx context.Context, limit int) ([]*model.UnconfirmedBlock, error) {
+	var fetched []*model.UnconfirmedBlock
 	return fetched, DoQuery(ctx, func(conn *pgx.Conn) error {
-		cur, err := conn.Query(ctx, "SELECT block_json from blocks b where b.status = $1 ORDER BY timestamp LIMIT $2", status, limit)
+		cur, err := conn.Query(ctx,
+			`SELECT hash, payee, block_json 
+			 FROM blocks b where b.status = 'unconfirmed' 
+			 ORDER BY timestamp LIMIT $1`, limit)
 		if err != nil {
 			return errors.Wrapf(err, "failed to fetch blocks from database")
 		}
@@ -51,15 +45,64 @@ func GetBlocks(ctx context.Context, status BlockStatusType, limit int) ([]*model
 			if !cur.Next() {
 				break
 			}
-			var data string
-			cur.Scan(&data)
+			var hash, wallet, data string
+			cur.Scan(&hash, &wallet, &data)
 
-			block := &model.Block{}
+			block := &model.UnconfirmedBlock{
+				Hash:   hash,
+				Wallet: wallet,
+			}
 			if err := json.Unmarshal([]byte(data), block); err != nil {
 				continue
 			}
 			fetched = append(fetched, block)
 		}
 		return nil
+	})
+}
+
+func GetConfirmedBlocks(ctx context.Context, status model.BlockStatusType, limit int) ([]*model.ConfirmedBlock, error) {
+	var fetched []*model.ConfirmedBlock
+	return fetched, DoQuery(ctx, func(conn *pgx.Conn) error {
+		cur, err := conn.Query(ctx,
+			`SELECT hash, coinbase_reward, cp.amount, cp.wallet, block_json from blocks b 
+				JOIN coinbase_payments cp ON cp.tx = b.coinbase_reward
+				WHERE b.status = $1 
+				ORDER BY timestamp LIMIT $2`, status, limit)
+		if err != nil {
+			return errors.Wrapf(err, "failed to fetch blocks from database")
+		}
+		defer cur.Close()
+
+		for {
+			if !cur.Next() {
+				break
+			}
+			var hash, txHash, wallet, data string
+			payment := uint64(0)
+			cur.Scan(&hash, &txHash, &payment, &wallet, &data)
+
+			block := &model.ConfirmedBlock{
+				UnconfirmedBlock: model.UnconfirmedBlock{Hash: hash},
+				CoinbasePayment: &model.CoinbasePayment{
+					TxId:   txHash,
+					Wallet: wallet,
+					Amount: payment,
+				},
+			}
+			if err := json.Unmarshal([]byte(data), block); err != nil {
+				continue
+			}
+			fetched = append(fetched, block)
+		}
+		return nil
+	})
+}
+
+func UpdateBlockCoinbaseTransaction(ctx context.Context, block *model.ConfirmedBlock) error {
+	return DoQuery(ctx, func(conn *pgx.Conn) error {
+		_, err := conn.Exec(ctx, `UPDATE blocks b SET coinbase_reward = $1, status = 'confirmed'
+					WHERE status = 'unconfirmed' AND hash = $2`, block.CoinbasePayment.TxId, block.UnconfirmedBlock.Hash)
+		return err
 	})
 }

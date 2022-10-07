@@ -51,9 +51,11 @@ CREATE TABLE blocks (
     miner text NOT NULL,
     payee text NOT NULL,
     round_time interval NOT NULL,
-    block_json jsonb NOT NULL,
+    daascore bigint NOT NULL,
     bluescore bigint NOT NULL,
     luck double precision NOT NULL,
+    block_json jsonb NOT NULL,
     status block_status DEFAULT 'unconfirmed'::block_status,
-    coinbase_reward text REFERENCES coinbase_payments(tx)
+    coinbase_reward text REFERENCES coinbase_payments(tx) UNIQUE,
+    pool text
 );

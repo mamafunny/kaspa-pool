@@ -30,6 +30,7 @@ func TestMain(m *testing.M) {
 		DB:   0, // use default DB
 	})
 	if err := rd.Ping(context.Background()); err.Err() != nil {
+		log.Println("Did you start docker?")
 		panic(errors.Wrapf(err.Err(), "FATAL, failed to connect to redis at %s", ":6379"))
 	}
 	rd.Del(context.Background(), "share_buffer")
