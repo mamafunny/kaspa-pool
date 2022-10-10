@@ -3,6 +3,7 @@ package cashier
 import (
 	"context"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -34,21 +35,29 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-var testEffort = postgres.EffortMap{
-	"A": 100,
-	"B": 500,
-	"C": 399,
-	"D": 1,
+var testEffort = []model.LedgerEntry{
+	{Wallet: "A", Amount: 100, Status: model.LedgerEntryStatusOwed, TxId: nil},
+	{Wallet: "B", Amount: 500, Status: model.LedgerEntryStatusOwed, TxId: nil},
+	{Wallet: "C", Amount: 399, Status: model.LedgerEntryStatusOwed, TxId: nil},
+	{Wallet: "D", Amount: 1, Status: model.LedgerEntryStatusOwed, TxId: nil},
 }
 
 func TestPayoutCalculation(t *testing.T) {
+	postgres.DoExecOrDie(context.Background(), "DELETE from ledger")
+	postgres.DoExecOrDie(context.Background(), "DELETE from shares")
+	postgres.DoExecOrDie(context.Background(), "DELETE from blocks")
+	postgres.DoExecOrDie(context.Background(), blockData)
+
+	blockhash := "9d6e8049dc0c78499b034981d305541d65d39c5c3ba560eca52febebac06caa6"
+
+	sort.Slice(testEffort, func(i, j int) bool { return testEffort[i].Wallet < testEffort[j].Wallet })
 	// Generate a buffer of shares for each worker
 	totalEffort := uint64(0)
 	shares := []string{}
-	for k, v := range testEffort {
-		totalEffort += v
-		for i := uint64(0); i < v; i++ {
-			shares = append(shares, k)
+	for _, v := range testEffort {
+		totalEffort += v.Amount
+		for i := uint64(0); i < v.Amount; i++ {
+			shares = append(shares, string(v.Wallet))
 		}
 	}
 
@@ -70,21 +79,33 @@ func TestPayoutCalculation(t *testing.T) {
 		}
 	}
 
+	expectedEffort := model.EffortMap{"A": 100, "B": 500, "C": 399, "D": 1}
 	// fetch the aggregated shares back from pg, and validate it's what we expect
-	effort, err := postgres.GetSharesByWallet(context.Background(), time.Now(), int(totalEffort))
+	effort, err := postgres.GetSharesByWallet(context.Background(), time.Now(), totalEffort)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := cmp.Diff(testEffort, effort); d != "" {
+	if d := cmp.Diff(expectedEffort, effort); d != "" {
 		t.Fatalf("calculated incorrect effort: %s", d)
 	}
 
-	payout := DeterminePayouts(totalEffort, effort) // payout should be 1 to 1 share to $
-	if d := cmp.Diff((map[string]uint64)(testEffort), (map[string]uint64)(payout)); d != "" {
+	payout := DeterminePayouts(totalEffort, 0, effort) // payout should be 1 to 1 share to $
+	sort.Slice(payout, func(i, j int) bool { return payout[i].Wallet < payout[j].Wallet })
+	if d := cmp.Diff(&testEffort, &payout); d != "" {
 		t.Fatalf("calculated incorrect payout: %s", d)
 	}
-	if err := postgres.PutPayable(context.Background(), payout, 12345); err != nil {
+	if err := postgres.PutPayable(context.Background(), blockhash, payout); err != nil {
 		t.Fatal(err)
+	}
+
+	for _, v := range testEffort {
+		pending, err := postgres.GetPendingForWallet(context.Background(), v.Wallet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v.Amount != pending {
+			t.Fatalf("incorrect pending balance, expected %d, got %d", v.Amount, pending)
+		}
 	}
 }
 
@@ -106,7 +127,7 @@ func TestResolveBlock(t *testing.T) {
 	postgres.DoExecOrDie(context.Background(), blockData)
 	postgres.DoExecOrDie(context.Background(), transactionData)
 
-	resolved, err := ResolveBlocks(ctx, logger)
+	resolved, err := ResolveBlocks(ctx, "kaspa:qrstlz0uwkcrsrfswywfzesjek40d2m94mgq23xwwrjhav2qgzc9q4mxhjpau", logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +137,7 @@ func TestResolveBlock(t *testing.T) {
 	}
 	CommitResolvedBlocks(ctx, logger, resolved)
 
-	blocks, err := postgres.GetConfirmedBlocks(ctx, model.BlockStatusConfirmed, 10)
+	blocks, err := postgres.GetConfirmedBlocks(ctx, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,4 +148,20 @@ func TestResolveBlock(t *testing.T) {
 	if mapped["f2b36edcfaceaba4a21b24e0ce58c6264b51c577aa5bc8fa4c452f52b5d80d1f"].CoinbasePayment.TxId != "2301e103768b658e5b007fca72d227e3f2e29908b464500b4821d4809e423400" {
 		t.Fatal("incorrectly mapped block")
 	}
+}
+
+func TestCoinbase(t *testing.T) {
+	ctx := context.Background()
+
+	postgres.DoExecOrDie(context.Background(), "DELETE from blocks")
+	postgres.DoExecOrDie(context.Background(), "DELETE from coinbase_payments")
+	postgres.DoExecOrDie(context.Background(), transactionData)
+	tip, err := postgres.GetCoinbaseTip(ctx, "kaspa:qrstlz0uwkcrsrfswywfzesjek40d2m94mgq23xwwrjhav2qgzc9q4mxhjpau")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tip != 28564864 {
+		t.Fatalf("wrong value for daa tip, got %d, expected 28564864", tip)
+	}
+
 }

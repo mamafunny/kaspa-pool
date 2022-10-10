@@ -8,6 +8,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/onemorebsmith/kaspa-pool/src/common"
 	"github.com/onemorebsmith/kaspa-pool/src/gostratum"
+	"github.com/onemorebsmith/kaspa-pool/src/model"
 	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -69,7 +70,7 @@ func ListenAndServe(cfg WorkerConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ksApi.Start(ctx, func() {
-		template, err := ksApi.GetBlockTemplate(cfg.PoolWallet)
+		template, err := ksApi.GetBlockTemplate(model.KaspaWalletAddr(cfg.PoolWallet))
 		if err != nil {
 			logger.Error("failed fetching block template", zap.Error(err))
 			return

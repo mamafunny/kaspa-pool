@@ -17,13 +17,6 @@ const (
 	BlockStatusError       BlockStatusType = "error"
 )
 
-type CoinbasePayment struct {
-	TxId     string
-	Wallet   string
-	Amount   uint64
-	Daascore uint64
-}
-
 // ConfirmedBlock - a mined block and it's coinbase payment transaction
 type ConfirmedBlock struct {
 	UnconfirmedBlock

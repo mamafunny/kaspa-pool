@@ -8,26 +8,22 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/onemorebsmith/kaspa-pool/src/model"
 	"github.com/onemorebsmith/kaspa-pool/src/postgres"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
 const coinbase_payment_window = 32
 
-func ResolverThread(ctx context.Context, logger *zap.Logger) {
+func BlockResolverThread(ctx context.Context, poolWallet model.KaspaWalletAddr, logger *zap.Logger) {
 	ticker := time.NewTicker(30 * time.Second)
+	logger = logger.With(zap.String("component", "BlockResolverThread"))
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("stopping block resolution thread, context cancelled")
 			return
 		case <-ticker.C:
-			blocks, err := ResolveBlocks(ctx, logger)
-			if err != nil {
-				logger.Error("error resolving blocks", zap.Error(err))
-				continue
-			}
-			CommitResolvedBlocks(ctx, logger, blocks)
-			if err != nil {
+			if err := DoBlockResolve(ctx, poolWallet, logger); err != nil {
 				logger.Error("error committing resolved blocks", zap.Error(err))
 				continue
 			}
@@ -35,7 +31,19 @@ func ResolverThread(ctx context.Context, logger *zap.Logger) {
 	}
 }
 
-func ResolveBlocks(ctx context.Context, logger *zap.Logger) ([]*model.ConfirmedBlock, error) {
+func DoBlockResolve(ctx context.Context, poolWallet model.KaspaWalletAddr, logger *zap.Logger) error {
+	blocks, err := ResolveBlocks(ctx, poolWallet, logger)
+	if err != nil {
+		return errors.Wrap(err, "error resolving blocks")
+	}
+	CommitResolvedBlocks(ctx, logger, blocks)
+	if err != nil {
+		return errors.Wrap(err, "error committing resolved blocks")
+	}
+	return nil
+}
+
+func ResolveBlocks(ctx context.Context, wallet model.KaspaWalletAddr, logger *zap.Logger) ([]*model.ConfirmedBlock, error) {
 	logger.Info("resolving blocks")
 	blocks, err := postgres.GetUnconfirmedBlocks(ctx, 10)
 	if err != nil {
@@ -45,7 +53,7 @@ func ResolveBlocks(ctx context.Context, logger *zap.Logger) ([]*model.ConfirmedB
 	var resolvedBlocks []*model.ConfirmedBlock
 	for _, block := range blocks {
 		logger.Info(fmt.Sprintf("resolving block %s - daa: %d", block.Hash, block.Header.DAAScore))
-		cp, err := ResolveCoinbasePayment(ctx, block.Wallet, block.Header.DAAScore, coinbase_payment_window)
+		cp, err := ResolveCoinbasePayment(ctx, wallet, block.Header.DAAScore, coinbase_payment_window)
 		if err != nil {
 			logger.Warn(fmt.Sprintf("failed to resolve block %s - daa: %d", block.Hash, block.Header.DAAScore), zap.Error(err))
 			continue
@@ -61,7 +69,7 @@ func ResolveBlocks(ctx context.Context, logger *zap.Logger) ([]*model.ConfirmedB
 	return resolvedBlocks, nil
 }
 
-func ResolveCoinbasePayment(ctx context.Context, wallet string, daascore uint64, window int) (*model.CoinbasePayment, error) {
+func ResolveCoinbasePayment(ctx context.Context, wallet model.KaspaWalletAddr, daascore uint64, window int) (*model.CoinbasePayment, error) {
 	var result *model.CoinbasePayment
 	// To determine the coinbase payment we're going to take the closest wallet utxo for the payee
 	// wallet to the unconfirmed block's daacore, within a tight window

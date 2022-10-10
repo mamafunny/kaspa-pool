@@ -18,10 +18,11 @@ func PutBlock(ctx context.Context, block *externalapi.DomainBlock, miner string,
 		blockhash := consensushashing.BlockHash(block)
 		json, _ := json.Marshal(appmessage.DomainBlockToRPCBlock(block)) // domain blocks don't have public members
 
-		_, err := conn.Exec(context.Background(), `INSERT into blocks(hash, timestamp, miner, payee, 
-			round_time, block_json, bluescore, luck) 
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			blockhash.String(), time.Now().UTC(), miner, payee, roundTime, string(json), block.Header.BlueScore(), 100)
+		_, err := conn.Exec(context.Background(),
+			`INSERT into blocks(hash, timestamp, miner, payee, round_time, block_json, bluescore, daascore, luck) 
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			blockhash.String(), time.Now().UTC(), miner, payee,
+			roundTime, string(json), block.Header.BlueScore(), block.Header.DAAScore(), 100)
 		if err != nil {
 			return errors.Wrapf(err, "failed to record block to databse")
 		}
@@ -61,14 +62,14 @@ func GetUnconfirmedBlocks(ctx context.Context, limit int) ([]*model.UnconfirmedB
 	})
 }
 
-func GetConfirmedBlocks(ctx context.Context, status model.BlockStatusType, limit int) ([]*model.ConfirmedBlock, error) {
+func GetConfirmedBlocks(ctx context.Context, limit int) ([]*model.ConfirmedBlock, error) {
 	var fetched []*model.ConfirmedBlock
 	return fetched, DoQuery(ctx, func(conn *pgx.Conn) error {
 		cur, err := conn.Query(ctx,
 			`SELECT hash, coinbase_reward, cp.amount, cp.wallet, block_json from blocks b 
 				JOIN coinbase_payments cp ON cp.tx = b.coinbase_reward
-				WHERE b.status = $1 
-				ORDER BY timestamp LIMIT $2`, status, limit)
+				WHERE b.status = 'confirmed' 
+				ORDER BY timestamp LIMIT $1`, limit)
 		if err != nil {
 			return errors.Wrapf(err, "failed to fetch blocks from database")
 		}

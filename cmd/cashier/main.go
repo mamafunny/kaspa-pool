@@ -37,6 +37,7 @@ func main() {
 	flag.StringVar(&cfg.HealthCheckPort, "hcp", cfg.HealthCheckPort, `(rarely used) if defined will expose a health check on /readyz, default ""`)
 	flag.StringVar(&cfg.PoolWallet, "wallet", cfg.PoolWallet, `pool wallet to use for all block payouts"`)
 	flag.StringVar(&cfg.PostgresConfig, "pg", cfg.PostgresConfig, `config string for the postgres connection"`)
+	flag.Uint64Var(&cfg.PPLNSWindow, "pplns", cfg.PPLNSWindow, `number of shares in the pplns window"`)
 
 	flag.Parse()
 
@@ -48,13 +49,15 @@ func main() {
 	log.Printf("\thealth check:  %s", cfg.HealthCheckPort)
 	log.Printf("\twallet:  		 %s", cfg.PoolWallet)
 	log.Printf("\tmock:  		 %t", cfg.Mock)
+	log.Printf("\tpplns_window   %d", cfg.PPLNSWindow)
 	log.Println("----------------------------------")
 
 	postgres.ConfigurePostgres(cfg.PostgresConfig)
 
 	logger := common.ConfigureZap(zap.InfoLevel)
-	beginReadyzHandler(cfg)
-	cashier.ResolverThread(context.Background(), logger)
+
+	go beginReadyzHandler(cfg)
+	cashier.StartPipeline(context.Background(), cfg, logger)
 }
 
 func beginReadyzHandler(cfg cashier.CashierConfig) {

@@ -17,7 +17,7 @@ func NewMockCashier(cfg CashierConfig) (Cashier, error) {
 func (cc *MockCashierClient) Send(ctx context.Context, address string, amount uint64) error {
 	cc.transactions = append(cc.transactions, &Transaction{
 		To:     address,
-		From:   cc.config.PoolWallet,
+		From:   string(cc.config.PoolWallet),
 		Amount: amount,
 	})
 

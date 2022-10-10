@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/onemorebsmith/kaspa-pool/src/model"
 	"github.com/pkg/errors"
 )
 
@@ -20,14 +21,12 @@ func PutShare(ctx context.Context, address string, bluescore, nonce uint64, diff
 	})
 }
 
-type EffortMap map[string]uint64
-
-func GetHashrate(pg *pgx.Conn, lookback time.Duration) (EffortMap, error) {
+func GetHashrate(pg *pgx.Conn, lookback time.Duration) (model.EffortMap, error) {
 	return nil, nil
 }
 
-func GetSharesByWallet(ctx context.Context, before time.Time, lookback int) (EffortMap, error) {
-	var effort EffortMap
+func GetSharesByWallet(ctx context.Context, before time.Time, lookback uint64) (model.EffortMap, error) {
+	var effort model.EffortMap
 	return effort, DoQuery(ctx, func(conn *pgx.Conn) error {
 		res, err := conn.Query(context.Background(),
 			`SELECT subq.wallet, SUM(subq.diff) 
@@ -37,7 +36,7 @@ func GetSharesByWallet(ctx context.Context, before time.Time, lookback int) (Eff
 			return errors.Wrapf(err, "failed to fetch shares from database")
 		}
 		defer res.Close()
-		effort = EffortMap{}
+		effort = model.EffortMap{}
 		for {
 			if !res.Next() {
 				break
@@ -47,7 +46,7 @@ func GetSharesByWallet(ctx context.Context, before time.Time, lookback int) (Eff
 			if err := res.Scan(&wallet, &count); err != nil {
 				return errors.Wrap(err, "failed unmarshalling data")
 			}
-			effort[wallet] = count
+			effort[model.KaspaWalletAddr(wallet)] = count
 		}
 
 		return nil

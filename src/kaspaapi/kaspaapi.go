@@ -9,6 +9,7 @@ import (
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/infrastructure/network/rpcclient"
 	"github.com/onemorebsmith/kaspa-pool/src/common"
+	"github.com/onemorebsmith/kaspa-pool/src/model"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -32,6 +33,10 @@ func NewKaspaAPI(address string, logger *zap.Logger) (*KaspaApi, error) {
 		kaspad:    client,
 		connected: true,
 	}, nil
+}
+
+func (ks *KaspaApi) Close() error {
+	return ks.kaspad.Close()
 }
 
 func (ks *KaspaApi) Start(ctx context.Context, blockCb func()) {
@@ -142,4 +147,24 @@ func (ks *KaspaApi) GetBlockTemplate(addr string) (*appmessage.GetBlockTemplateR
 func (ks *KaspaApi) SubmitBlock(block *externalapi.DomainBlock) error {
 	_, err := ks.kaspad.SubmitBlock(block)
 	return err
+}
+
+func (ks *KaspaApi) GetCoinbaseUTXOsForWallet(wallet model.KaspaWalletAddr, minDaascore uint64) ([]*model.CoinbasePayment, error) {
+	resp, err := ks.kaspad.GetUTXOsByAddresses([]string{string(wallet)})
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to fetch utxos for wallet %s", wallet)
+	}
+	var utxos []*model.CoinbasePayment
+	for _, e := range resp.Entries {
+		if e.UTXOEntry.IsCoinbase && e.UTXOEntry.BlockDAAScore > minDaascore {
+			utxos = append(utxos, &model.CoinbasePayment{
+				TxId:     e.Outpoint.TransactionID,
+				TxIndex:  e.Outpoint.Index,
+				Amount:   e.UTXOEntry.Amount,
+				Daascore: e.UTXOEntry.BlockDAAScore,
+				Wallet:   string(wallet),
+			})
+		}
+	}
+	return utxos, nil
 }

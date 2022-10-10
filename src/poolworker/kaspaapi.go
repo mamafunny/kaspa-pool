@@ -9,6 +9,7 @@ import (
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/infrastructure/network/rpcclient"
 	"github.com/onemorebsmith/kaspa-pool/src/common"
+	"github.com/onemorebsmith/kaspa-pool/src/model"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -131,8 +132,8 @@ func (s *KaspaApi) startBlockTemplateListener(ctx context.Context, blockReadyCb 
 
 var blockSlug = fmt.Sprintf(`onemorebsmith/kaspa-pool_%s`, common.Version)
 
-func (ks *KaspaApi) GetBlockTemplate(addr string) (*appmessage.GetBlockTemplateResponseMessage, error) {
-	template, err := ks.kaspad.GetBlockTemplate(addr, blockSlug)
+func (ks *KaspaApi) GetBlockTemplate(addr model.KaspaWalletAddr) (*appmessage.GetBlockTemplateResponseMessage, error) {
+	template, err := ks.kaspad.GetBlockTemplate(string(addr), blockSlug)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed fetching new block template from kaspa")
 	}

@@ -3,3 +3,4 @@
     kaspad_address: :16110
     postgres:       postgres://postgres:postgres@localhost:5432/kaspapool
     pool_wallet:    kaspa:qrstlz0uwkcrsrfswywfzesjek40d2m94mgq23xwwrjhav2qgzc9q4mxhjpau
+    pplns_window:   20000

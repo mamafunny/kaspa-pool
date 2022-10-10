@@ -15,35 +15,37 @@ CREATE INDEX shares_wallet_idx ON shares(wallet text_ops);
 
 -- Ledger -------------------------------------------------------
 
-CREATE TYPE ledger_entry_status AS ENUM ('owed', 'pending', 'submitted', 'confirmed', 'error');
+CREATE TYPE ledger_entry_status AS ENUM ('owed', 'submitted', 'confirmed', 'error');
 
 CREATE TABLE ledger (
     id SERIAL PRIMARY KEY,
     payee text NOT NULL,
     amount bigint NOT NULL,
-    bluescore bigint NOT NULL,
-    status ledger_entry_status DEFAULT 'owed'::ledger_entry_status,
-    updated timestamp without time zone NOT NULL,
+    daascore bigint NOT NULL,
+    status ledger_entry_status NOT NULL DEFAULT 'owed'::ledger_entry_status,
     tx_id text UNIQUE
 );
 
-CREATE UNIQUE INDEX ledger_bluescore_payee_idx ON ledger(bluescore int8_ops,payee text_ops);
+CREATE UNIQUE INDEX ledger_daascore_payee_idx ON ledger(daascore int8_ops,payee text_ops);
+
 
 -- Coinbase -------------------------------------------------------
 
 CREATE TABLE coinbase_payments (
     tx text PRIMARY KEY UNIQUE,
+    tx_idx integer,
     wallet text NOT NULL,
     amount bigint NOT NULL,
     daascore bigint NOT NULL
 );
+
 
 -- Indices -------------------------------------------------------
 
 CREATE UNIQUE INDEX coinbase_payments_tx_key ON coinbase_payments(tx text_ops);
 
 -- Blocks -------------------------------------------------------
-CREATE TYPE block_status AS ENUM ('unconfirmed', 'confirmed', 'paid', 'error');
+CREATE TYPE block_status AS ENUM ('unconfirmed', 'confirmed', 'payment_pending', 'paid', 'error');
 
 CREATE TABLE blocks (
     hash text PRIMARY KEY,
