@@ -61,3 +61,10 @@ CREATE TABLE blocks (
     coinbase_reward text REFERENCES coinbase_payments(tx) UNIQUE,
     pool text
 );
+
+-- Global Transactions -------------------------------------------------------
+
+CREATE TABLE global_tx_ledger (
+    tx_id text PRIMARY KEY,
+    raw jsonb NOT NULL
+);

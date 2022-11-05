@@ -10,6 +10,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/go-cmp/cmp"
 	"github.com/onemorebsmith/kaspa-pool/src/common"
+	"github.com/onemorebsmith/kaspa-pool/src/kaspaapi"
 	"github.com/onemorebsmith/kaspa-pool/src/model"
 	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
@@ -164,4 +165,32 @@ func TestCoinbase(t *testing.T) {
 		t.Fatalf("wrong value for daa tip, got %d, expected 28564864", tip)
 	}
 
+}
+
+func TestTransactionListener(t *testing.T) {
+	//ctx := context.Background()
+	ka, err := kaspaapi.NewKaspaAPI(":16110", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	StartListener(ctx, ka, logger)
+	time.Sleep(5 * time.Minute) // obviously don't check this in
+}
+
+func TestTransactionBackfill(t *testing.T) {
+	//ctx := context.Background()
+	ka, err := kaspaapi.NewKaspaAPI(":16110", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = Backfill(ctx, ka, logger, "bbf5f762cb20cfd73f34422f7a003e01c3e19f6ce080396044b5df3af42a9104")
+	if err != nil {
+		t.Fatal(err)
+	}
 }

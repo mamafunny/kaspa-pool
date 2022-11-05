@@ -71,3 +71,33 @@ func GetPendingForWallet(ctx context.Context, wallet model.KaspaWalletAddr) (uin
 		return row.Scan(&pendingBalance)
 	})
 }
+
+func GetWalletsPendingPayment(ctx context.Context, minPayout, limit uint64) ([]*model.LedgerEntry, error) {
+	var fetched []*model.LedgerEntry
+	return fetched, DoQuery(ctx, func(conn *pgx.Conn) error {
+		cur, err := conn.Query(ctx,
+			`SELECT payee, amount 
+				FROM (SELECT payee, SUM(amount) as amount 
+					FROM ledger l where l.status = 'owed' 
+					GROUP BY 1) tt 
+				WHERE amount > $1 ORDER BY 2 LIMIT $2`, minPayout*model.KasDigitMultipler, limit)
+		if err != nil {
+			return errors.Wrapf(err, "failed to fetch blocks from database")
+		}
+		defer cur.Close()
+
+		for {
+			if !cur.Next() {
+				break
+			}
+			entry := &model.LedgerEntry{}
+			if err := cur.Scan(&entry.Wallet, &entry.Amount,
+				&entry.Daascore, &entry.Status, &entry.TxId); err != nil {
+				return errors.Wrap(err, "failed unmarshalling ledger entry")
+			}
+
+			fetched = append(fetched, entry)
+		}
+		return nil
+	})
+}

@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"time"
 
 	"github.com/onemorebsmith/kaspa-pool/src/cashier"
 	"github.com/onemorebsmith/kaspa-pool/src/common"
+	"github.com/onemorebsmith/kaspa-pool/src/kaspaapi"
 	"github.com/onemorebsmith/kaspa-pool/src/postgres"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -55,9 +57,26 @@ func main() {
 	postgres.ConfigurePostgres(cfg.PostgresConfig)
 
 	logger := common.ConfigureZap(zap.InfoLevel)
+	kapi, err := kaspaapi.NewKaspaAPI(cfg.RPCServer, logger)
+	if err != nil {
+		panic(err)
+	}
+	// kwallet := kaspaapi.NewKaspawalletApi(cfg.DaemonAddress, logger)
+	// _, err = ka.SendKas(context.Background(),
+	// 	"kaspa:qqkrl0er5ka5snd55gr9rcf6rlpx8nln8gf3jxf83w4dc0khfqmauy6qs83zm",
+	// 	"kaspa:qrstlz0uwkcrsrfswywfzesjek40d2m94mgq23xwwrjhav2qgzc9q4mxhjpau",
+	// 	1, "")
+	if err != nil {
+		panic(err)
+	}
 
 	go beginReadyzHandler(cfg)
-	cashier.StartPipeline(context.Background(), cfg, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go cashier.StartListener(ctx, kapi, logger)
+	go cashier.StartPruner(ctx, 5*time.Minute, logger)
+	cashier.StartPipeline(ctx, cfg, logger)
 }
 
 func beginReadyzHandler(cfg cashier.CashierConfig) {

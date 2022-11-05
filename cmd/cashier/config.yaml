@@ -1,6 +1,10 @@
-    stratum_port:   :4444
-    hcp:            :5556
-    kaspad_address: :16110
-    postgres:       postgres://postgres:postgres@localhost:5432/kaspapool
-    pool_wallet:    kaspa:qrstlz0uwkcrsrfswywfzesjek40d2m94mgq23xwwrjhav2qgzc9q4mxhjpau
-    pplns_window:   20000
+stratum_port:         :4444
+hcp:                  :5556
+kaspad_address:       :16110
+kaspa_wallet_address: localhost:8082
+postgres:             postgres://postgres:postgres@localhost:5432/kaspapool
+pool_wallet:          kaspa:qrstlz0uwkcrsrfswywfzesjek40d2m94mgq23xwwrjhav2qgzc9q4mxhjpau
+paylout_strategy:     pplns
+pplns_window:         20000
+dev_fee:              0.005
+pool_fee:             0.005

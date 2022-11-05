@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kaspanet/kaspad/app/appmessage"
+
 	"github.com/kaspanet/kaspad/domain/consensus/model/externalapi"
 	"github.com/kaspanet/kaspad/infrastructure/network/rpcclient"
 	"github.com/onemorebsmith/kaspa-pool/src/common"
@@ -167,4 +168,28 @@ func (ks *KaspaApi) GetCoinbaseUTXOsForWallet(wallet model.KaspaWalletAddr, minD
 		}
 	}
 	return utxos, nil
+}
+
+type BlockCB func(b *appmessage.RPCBlock)
+
+func (s *KaspaApi) StartBlockAddedListener(ctx context.Context, blockCb BlockCB) error {
+	err := s.kaspad.RegisterForBlockAddedNotifications(func(notification *appmessage.BlockAddedNotificationMessage) {
+		if ctx.Err() == nil { // check for context cancelled
+			go blockCb(notification.Block)
+		}
+	})
+	return errors.Wrap(err, "failed to subscribe to kaspad block added notifications")
+}
+
+func (s *KaspaApi) GetBlocksSince(ctx context.Context, lowHash string, blockCb BlockCB) error {
+	blocks, err := s.kaspad.GetBlocks(lowHash, true, true)
+	if err != nil {
+		return errors.Wrap(err, "failed to fetch blocks")
+	}
+
+	for _, v := range blocks.Blocks {
+		blockCb(v)
+	}
+
+	return nil
 }
